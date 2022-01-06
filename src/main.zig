@@ -80,6 +80,8 @@ pub fn main() !void {
       @sizeOf(Vertex), @intToPtr(?*c.GLvoid, @offsetOf(Vertex, "col")));
   }
 
+  c.glEnable(c.GL_FRAMEBUFFER_SRGB);
+
   while (c.glfwWindowShouldClose(window) == c.GLFW_FALSE) {
     var width: c.GLint = undefined;
     var height: c.GLint = undefined;
