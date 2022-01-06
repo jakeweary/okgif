@@ -9,7 +9,7 @@ pub fn keyCallback(window: ?*c.GLFWwindow, key: c_int, _: c_int, action: c_int, 
     c.glfwSetWindowShouldClose(window, c.GLFW_TRUE);
 }
 
-pub fn errorCallback(_: c_int, description: [*c]const c.GLchar) callconv(.C) void {
+pub fn errorCallback(_: c_int, description: [*c]const u8) callconv(.C) void {
   std.debug.panic("GLFW Error: {s}", .{ description });
 }
 

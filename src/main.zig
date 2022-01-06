@@ -53,21 +53,22 @@ pub fn main() !void {
   const loc_vpos = @intCast(c.GLuint, c.glGetAttribLocation(program.id, "vPos"));
   const loc_vcol = @intCast(c.GLuint, c.glGetAttribLocation(program.id, "vCol"));
 
-  var vertex_buffer: c.GLuint = undefined;
-  c.glGenBuffers(1, &vertex_buffer);
-  defer c.glDeleteBuffers(1, &vertex_buffer);
+  var vbo: c.GLuint = undefined;
+  c.glGenBuffers(1, &vbo);
+  defer c.glDeleteBuffers(1, &vbo);
 
-  var vertex_array: c.GLuint = undefined;
-  c.glGenVertexArrays(1, &vertex_array);
-  defer c.glDeleteVertexArrays(1, &vertex_array);
+  var vao: c.GLuint = undefined;
+  c.glGenVertexArrays(1, &vao);
+  defer c.glDeleteVertexArrays(1, &vao);
 
   {
-    c.glBindBuffer(c.GL_ARRAY_BUFFER, vertex_buffer);
+    c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
     defer c.glBindBuffer(c.GL_ARRAY_BUFFER, 0);
 
-    c.glBufferData(c.GL_ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), vertices[0..], c.GL_STATIC_DRAW);
+    c.glBufferData(c.GL_ARRAY_BUFFER,
+      @sizeOf(@TypeOf(vertices)), vertices[0..], c.GL_STATIC_DRAW);
 
-    c.glBindVertexArray(vertex_array);
+    c.glBindVertexArray(vao);
     defer c.glBindVertexArray(0);
 
     c.glEnableVertexAttribArray(loc_vpos);
@@ -98,9 +99,8 @@ pub fn main() !void {
 
     c.glUseProgram(program.id);
     defer c.glUseProgram(0);
-
     c.glUniformMatrix4fv(loc_mvp, 1, c.GL_FALSE, @ptrCast([*c]const f32, &mvp));
-    c.glBindVertexArray(vertex_array);
+    c.glBindVertexArray(vao);
     defer c.glBindVertexArray(0);
     c.glDrawArrays(c.GL_TRIANGLES, 0, vertices.len);
 
