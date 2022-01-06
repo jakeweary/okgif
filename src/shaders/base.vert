@@ -1,11 +1,11 @@
 #version 330
 
-uniform mat4 MVP;
-in vec3 vCol;
-in vec2 vPos;
-out vec3 color;
+uniform mat4 uMVP;
+in vec2 aPosition;
+in vec3 aColor;
+out vec3 vColor;
 
 void main() {
-  gl_Position = MVP * vec4(vPos, 0.0, 1.0);
-  color = vCol;
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 0.0, 1.0);
 }

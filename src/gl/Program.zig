@@ -41,3 +41,11 @@ pub fn deinit(self: *const Self) void {
   for (shaders[0..@intCast(usize, count)]) |id|
     c.glDeleteShader(id);
 }
+
+pub fn attribute(self: *const Self, name: [:0]const u8) c.GLuint {
+  return @intCast(c.GLuint, c.glGetAttribLocation(self.id, name));
+}
+
+pub fn uniform(self: *const Self, name: [:0]const u8) c.GLint {
+  return c.glGetUniformLocation(self.id, name);
+}

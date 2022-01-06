@@ -2,13 +2,21 @@ const c = @import("c.zig");
 const std = @import("std");
 const gl = @import("gl/gl.zig");
 
-const Vertex = struct { pos: c.vec2, col: c.vec3 };
-
-const vertices = [_]Vertex{
-  .{ .pos = .{ -0.6, -0.4 }, .col = .{ 1, 0, 0 } },
-  .{ .pos = .{  0.6, -0.4 }, .col = .{ 0, 1, 0 } },
-  .{ .pos = .{  0.0,  0.6 }, .col = .{ 0, 0, 1 } }
+const Vertex = struct {
+  position: c.vec2,
+  color: c.vec3
 };
+
+fn triangle() [3]Vertex {
+  const third = @as(f32, std.math.tau) / 3;
+  const x = @sin(third);
+  const y = @cos(third);
+  return .{
+    .{ .position = .{  0, 1 }, .color = .{ 1, 0, 0 } },
+    .{ .position = .{ -x, y }, .color = .{ 0, 1, 0 } },
+    .{ .position = .{  x, y }, .color = .{ 0, 0, 1 } }
+  };
+}
 
 pub fn main() !void {
   _ = c.glfwSetErrorCallback(gl.errorCallback);
@@ -19,7 +27,7 @@ pub fn main() !void {
 
   c.glfwWindowHint(c.GLFW_OPENGL_DEBUG_CONTEXT, c.GLFW_TRUE);
   c.glfwWindowHint(c.GLFW_SAMPLES, 4);
-  const window = c.glfwCreateWindow(960, 540, "", null, null)
+  const window = c.glfwCreateWindow(720, 720, "", null, null)
     orelse return error.GLFWCreateWindowError;
   defer c.glfwDestroyWindow(window);
 
@@ -30,6 +38,8 @@ pub fn main() !void {
 
   gl.enableDebugMessages();
   c.glEnable(c.GL_FRAMEBUFFER_SRGB);
+  // c.glEnable(c.GL_BLEND);
+  // c.glBlendFunc(c.GL_ONE, c.GL_ONE);
 
   //
 
@@ -38,9 +48,9 @@ pub fn main() !void {
   const program = try gl.Program.init(vs, fs);
   defer program.deinit();
 
-  const loc_mvp = c.glGetUniformLocation(program.id, "MVP");
-  const loc_vpos = @intCast(c.GLuint, c.glGetAttribLocation(program.id, "vPos"));
-  const loc_vcol = @intCast(c.GLuint, c.glGetAttribLocation(program.id, "vCol"));
+  const aPosition = program.attribute("aPosition");
+  const aColor = program.attribute("aColor");
+  const uMVP = program.uniform("uMVP");
 
   var vbo: c.GLuint = undefined;
   c.glGenBuffers(1, &vbo);
@@ -54,19 +64,20 @@ pub fn main() !void {
     c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
     defer c.glBindBuffer(c.GL_ARRAY_BUFFER, 0);
 
-    c.glBufferData(c.GL_ARRAY_BUFFER,
-      @sizeOf(@TypeOf(vertices)), vertices[0..], c.GL_STATIC_DRAW);
+    const vertices = triangle();
+    const size = @sizeOf(@TypeOf(vertices));
+    c.glBufferData(c.GL_ARRAY_BUFFER, size, vertices[0..], c.GL_STATIC_DRAW);
 
     c.glBindVertexArray(vao);
     defer c.glBindVertexArray(0);
 
-    c.glEnableVertexAttribArray(loc_vpos);
-    c.glVertexAttribPointer(loc_vpos, 2, c.GL_FLOAT, c.GL_FALSE,
-      @sizeOf(Vertex), @intToPtr(?*c.GLvoid, @offsetOf(Vertex, "pos")));
+    c.glEnableVertexAttribArray(aPosition);
+    c.glVertexAttribPointer(aPosition, 2, c.GL_FLOAT, c.GL_FALSE,
+      @sizeOf(Vertex), @intToPtr(?*c.GLvoid, @offsetOf(Vertex, "position")));
 
-    c.glEnableVertexAttribArray(loc_vcol);
-    c.glVertexAttribPointer(loc_vcol, 3, c.GL_FLOAT, c.GL_FALSE,
-      @sizeOf(Vertex), @intToPtr(?*c.GLvoid, @offsetOf(Vertex, "col")));
+    c.glEnableVertexAttribArray(aColor);
+    c.glVertexAttribPointer(aColor, 3, c.GL_FLOAT, c.GL_FALSE,
+      @sizeOf(Vertex), @intToPtr(?*c.GLvoid, @offsetOf(Vertex, "color")));
   }
 
   while (c.glfwWindowShouldClose(window) == c.GLFW_FALSE) {
@@ -83,15 +94,16 @@ pub fn main() !void {
     var mvp: c.mat4x4 = undefined;
     c.mat4x4_identity(&m);
     c.mat4x4_rotate_Z(&m, &m, @floatCast(f32, c.glfwGetTime()));
+    c.mat4x4_scale_aniso(&m, &m, 0.8, 0.8, 0.8);
     c.mat4x4_ortho(&p, -ratio, ratio, -1, 1, 1, -1);
     c.mat4x4_mul(&mvp, &p, &m);
 
     c.glUseProgram(program.id);
     defer c.glUseProgram(0);
-    c.glUniformMatrix4fv(loc_mvp, 1, c.GL_FALSE, @ptrCast([*c]const f32, &mvp));
+    c.glUniformMatrix4fv(uMVP, 1, c.GL_FALSE, @ptrCast([*c]const f32, &mvp));
     c.glBindVertexArray(vao);
     defer c.glBindVertexArray(0);
-    c.glDrawArrays(c.GL_TRIANGLES, 0, vertices.len);
+    c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
 
     c.glfwSwapBuffers(window);
     c.glfwPollEvents();
