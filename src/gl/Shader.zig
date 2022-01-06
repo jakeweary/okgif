@@ -9,8 +9,8 @@ pub fn init(kind: c.GLenum, source: []const u8) !Self {
   const self = Self{ .id = c.glCreateShader(kind) };
   errdefer self.deinit();
 
-  const sources = [_][*]const u8{ source.ptr };
-  c.glShaderSource(self.id, 1, sources[0..], null);
+  const source_len = @intCast(c.GLint, source.len);
+  c.glShaderSource(self.id, 1, &source.ptr, &source_len);
   c.glCompileShader(self.id);
 
   var status: c.GLint = undefined;

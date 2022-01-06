@@ -23,6 +23,7 @@ pub fn main() !void {
     orelse return error.GLFWCreateWindowError;
   defer c.glfwDestroyWindow(window);
 
+  _ = c.glfwSetWindowSizeCallback(window, gl.windowSizeCallback);
   _ = c.glfwSetKeyCallback(window, gl.keyCallback);
   c.glfwMakeContextCurrent(window);
   c.glfwSwapInterval(1);
@@ -42,7 +43,7 @@ pub fn main() !void {
   defer particles.deinit();
 
   {
-    const n = 200;
+    const n = 150;
     try particles.ensureTotalCapacity(n * n * n);
     var x: f32 = 0.5; while (x < n) : (x += 1) {
       var y: f32 = 0.5; while (y < n) : (y += 1) {
@@ -64,6 +65,7 @@ pub fn main() !void {
   defer program.deinit();
 
   const a_position = program.attribute("aPosition");
+  const u_viewport = program.uniform("uViewport");
   const u_mvp = program.uniform("uMVP");
 
   var vbo: c.GLuint = undefined;
@@ -95,9 +97,6 @@ pub fn main() !void {
     c.glfwGetFramebufferSize(window, &width, &height);
     const ratio = @intToFloat(f32, width) / @intToFloat(f32, height);
 
-    c.glViewport(0, 0, width, height);
-    c.glClear(c.GL_COLOR_BUFFER_BIT);
-
     var m: c.mat4x4 = undefined;
     var p: c.mat4x4 = undefined;
     var mvp: c.mat4x4 = undefined;
@@ -105,11 +104,13 @@ pub fn main() !void {
     c.mat4x4_rotate_X(&m, &m, 0.003 * t);
     c.mat4x4_rotate_Y(&m, &m, 0.005 * t);
     c.mat4x4_rotate_Z(&m, &m, 0.007 * t);
-    c.mat4x4_perspective(&p, 30.0 / 360.0 * std.math.tau, ratio, 1e-3, 1e3);
+    c.mat4x4_perspective(&p, 30.0 / 360.0 * std.math.tau, ratio, 1e-5, 1e1);
     c.mat4x4_mul(&mvp, &p, &m);
 
+    c.glClear(c.GL_COLOR_BUFFER_BIT);
     c.glUseProgram(program.id);
     defer c.glUseProgram(0);
+    c.glUniform2i(u_viewport, width, height);
     c.glUniformMatrix4fv(u_mvp, 1, c.GL_FALSE, @ptrCast([*c]const f32, &mvp));
     c.glBindVertexArray(vao);
     defer c.glBindVertexArray(0);
