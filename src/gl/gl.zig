@@ -27,6 +27,22 @@ pub fn checkError() !void {
   };
 }
 
+pub fn enableDebugMessages() void {
+  var flags: c_int = undefined;
+  c.glGetIntegerv(c.GL_CONTEXT_FLAGS, &flags);
+  if (flags & c.GL_CONTEXT_FLAG_DEBUG_BIT != 0) {
+    c.glEnable(c.GL_DEBUG_OUTPUT);
+    c.glEnable(c.GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    c.glDebugMessageCallback(debugMessageCallback, null);
+    c.glDebugMessageControl(c.GL_DONT_CARE, c.GL_DONT_CARE, c.GL_DONT_CARE, 0, null, c.GL_TRUE);
+  }
+
+  log.info("{s}", .{ c.glGetString(c.GL_VENDOR) });
+  log.info("{s}", .{ c.glGetString(c.GL_RENDERER) });
+  log.info("OpenGL {s}", .{ c.glGetString(c.GL_VERSION) });
+  log.info("GLSL {s}", .{ c.glGetString(c.GL_SHADING_LANGUAGE_VERSION) });
+}
+
 pub fn debugMessageCallback(
   source: c.GLenum,
   kind: c.GLenum,

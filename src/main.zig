@@ -28,19 +28,8 @@ pub fn main() !void {
   c.glfwSwapInterval(1);
   _ = c.gladLoadGL(c.glfwGetProcAddress);
 
-  var flags: c_int = undefined;
-  c.glGetIntegerv(c.GL_CONTEXT_FLAGS, &flags);
-  if (flags & c.GL_CONTEXT_FLAG_DEBUG_BIT != 0) {
-    c.glEnable(c.GL_DEBUG_OUTPUT);
-    c.glEnable(c.GL_DEBUG_OUTPUT_SYNCHRONOUS);
-    c.glDebugMessageCallback(gl.debugMessageCallback, null);
-    c.glDebugMessageControl(c.GL_DONT_CARE, c.GL_DONT_CARE, c.GL_DONT_CARE, 0, null, c.GL_TRUE);
-  }
-
-  std.log.info("{s}", .{ c.glGetString(c.GL_VENDOR) });
-  std.log.info("{s}", .{ c.glGetString(c.GL_RENDERER) });
-  std.log.info("OpenGL {s}", .{ c.glGetString(c.GL_VERSION) });
-  std.log.info("GLSL {s}", .{ c.glGetString(c.GL_SHADING_LANGUAGE_VERSION) });
+  gl.enableDebugMessages();
+  c.glEnable(c.GL_FRAMEBUFFER_SRGB);
 
   //
 
@@ -80,11 +69,9 @@ pub fn main() !void {
       @sizeOf(Vertex), @intToPtr(?*c.GLvoid, @offsetOf(Vertex, "col")));
   }
 
-  c.glEnable(c.GL_FRAMEBUFFER_SRGB);
-
   while (c.glfwWindowShouldClose(window) == c.GLFW_FALSE) {
-    var width: c.GLint = undefined;
-    var height: c.GLint = undefined;
+    var width: c_int = undefined;
+    var height: c_int = undefined;
     c.glfwGetFramebufferSize(window, &width, &height);
     const ratio = @intToFloat(f32, width) / @intToFloat(f32, height);
 
