@@ -48,13 +48,10 @@ pub fn debugMessageCallback(
   kind: c.GLenum,
   id: c.GLuint,
   severity: c.GLenum,
-  length: c.GLsizei,
+  _: c.GLsizei,
   message: [*c]const c.GLchar,
-  userParam: ?*const c.GLvoid,
+  _: ?*const c.GLvoid
 ) callconv(.C) void {
-  _ = length;
-  _ = userParam;
-
   const fmt = "{s} {s} {}: {s}";
   const args = .{
     switch (source) {
