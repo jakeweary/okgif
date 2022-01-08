@@ -1,8 +1,9 @@
 const c = @import("../c.zig");
 const std = @import("std");
-pub const log = std.log.scoped(.gl);
+
 pub const Shader = @import("Shader.zig");
 pub const Program = @import("Program.zig");
+pub const log = std.log.scoped(.gl);
 
 pub fn keyCallback(window: ?*c.GLFWwindow, key: c_int, _: c_int, action: c_int, _: c_int) callconv(.C) void {
   if (action == c.GLFW_PRESS and key == c.GLFW_KEY_ESCAPE)

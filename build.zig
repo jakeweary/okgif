@@ -17,12 +17,16 @@ pub fn build(b: *std.build.Builder) void {
   exe.setBuildMode(mode);
   exe.linkLibC();
   exe.addIncludeDir("deps/include");
+  exe.addIncludeDir("deps/ffmpeg/include");
   switch (exe.target.getOsTag()) {
     .windows => {
       exe.linkSystemLibrary("winmm");
       exe.linkSystemLibrary("gdi32");
       exe.linkSystemLibrary("opengl32");
       exe.addObjectFile("deps/lib/libglfw3.a");
+      exe.addObjectFile("deps/ffmpeg/lib/avcodec.lib");
+      exe.addObjectFile("deps/ffmpeg/lib/avformat.lib");
+      exe.addObjectFile("deps/ffmpeg/lib/avutil.lib");
       exe.addObject(glad);
     },
     else => @panic("Unsupported OS")
@@ -36,7 +40,7 @@ pub fn build(b: *std.build.Builder) void {
   const run_step = b.step("run", "Run the app");
   run_step.dependOn(&run_cmd.step);
 
-  const exe_tests = b.addTest("src/main.zig");
+  const exe_tests = b.addTest("src/tests.zig");
   exe_tests.setBuildMode(mode);
 
   const test_step = b.step("test", "Run unit tests");
