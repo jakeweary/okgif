@@ -16,14 +16,14 @@ pub fn init(kind: c.GLenum, source: []const u8) !Self {
   var status: c.GLint = undefined;
   c.glGetShaderiv(self.id, c.GL_COMPILE_STATUS, &status);
   if (status == c.GL_FALSE) {
-    var info: [0x1000]c.GLchar = undefined;
-    c.glGetShaderInfoLog(self.id, info.len, null, &info);
-    gl.log.err("{s}", .{ @as([*c]c.GLchar, &info) });
-
-    var num: usize = 1;
+    var line_n: usize = 1;
     var lines = std.mem.split(u8, source, "\n");
-    while (lines.next()) |line| : (num += 1)
-      gl.log.debug("{:0>3}: {s}", .{ num, line });
+    while (lines.next()) |line| : (line_n += 1)
+      gl.log.debug("{:0>3}: {s}", .{ line_n, line });
+
+    var info: [0x400:0]c.GLchar = undefined;
+    c.glGetShaderInfoLog(self.id, info.len, null, &info);
+    gl.log.err("{s}", .{ @as([*:0]c.GLchar, &info) });
 
     return error.ShaderCompilationError;
   }

@@ -23,9 +23,9 @@ pub fn init(vertex: []const u8, fragment: []const u8) !Self {
   var status: c.GLint = undefined;
   c.glGetProgramiv(self.id, c.GL_LINK_STATUS, &status);
   if (status == c.GL_FALSE) {
-    var info: [0x1000]c.GLchar = undefined;
+    var info: [0x400:0]c.GLchar = undefined;
     c.glGetProgramInfoLog(self.id, info.len, null, &info);
-    gl.log.err("{s}", .{ @as([*c]c.GLchar, &info) });
+    gl.log.err("{s}", .{ @as([*:0]c.GLchar, &info) });
 
     return error.ProgramLinkageError;
   }
