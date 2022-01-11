@@ -1,8 +1,8 @@
 const c = @import("c.zig");
 const std = @import("std");
+const util = @import("util.zig");
 const av = @import("av/av.zig");
 const gl = @import("gl/gl.zig");
-const VideoDecoder = @import("av/VideoDecoder.zig");
 
 pub const log_level = .debug;
 
@@ -15,7 +15,7 @@ pub fn main() !void {
   const filepath = std.mem.sliceTo(std.os.argv[1], 0);
   const filename = std.fs.path.basename(filepath);
 
-  var decoder = try VideoDecoder.init(filepath.ptr);
+  var decoder = try av.VideoDecoder.init(filepath.ptr);
   defer decoder.deinit();
 
   // ---
@@ -51,41 +51,28 @@ pub fn main() !void {
   const program = try gl.Program.init(vs, fs);
   defer program.deinit();
 
-  const a_position = program.attribute("aPosition");
-  const u_channel_y = program.uniform("uChannelY");
-  const u_channel_cb = program.uniform("uChannelCb");
-  const u_channel_cr = program.uniform("uChannelCr");
-
-  var vbo: c.GLuint = undefined;
-  c.glGenBuffers(1, &vbo);
-  defer c.glDeleteBuffers(1, &vbo);
+  const u_rgb = program.uniform("uRGB");
 
   var vao: c.GLuint = undefined;
   c.glGenVertexArrays(1, &vao);
   defer c.glDeleteVertexArrays(1, &vao);
 
-  var textures: [3]c.GLuint = undefined;
-  c.glGenTextures(textures.len, &textures);
-  defer c.glDeleteTextures(textures.len, &textures);
+  var texture: c.GLuint = undefined;
+  c.glGenTextures(1, &texture);
+  defer c.glDeleteTextures(1, &texture);
 
   {
-    const quad = [_]c.vec2{ .{ 1, 1 }, .{ -1, 1 }, .{ 1, -1 }, .{ -1, -1 } };
-    const size = @intCast(c_longlong, @sizeOf(@TypeOf(quad)));
-    defer c.glBindBuffer(c.GL_ARRAY_BUFFER, 0);
-    c.glBindBuffer(c.GL_ARRAY_BUFFER, vbo);
-    c.glBufferData(c.GL_ARRAY_BUFFER, size, &quad, c.GL_STATIC_DRAW);
-
-    defer c.glBindVertexArray(0);
-    c.glBindVertexArray(vao);
-    c.glEnableVertexAttribArray(a_position);
-    c.glVertexAttribPointer(a_position, 2, c.GL_FLOAT, c.GL_FALSE, 0, null);
-  }
-
-  for (textures) |texture| {
     defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
     c.glBindTexture(c.GL_TEXTURE_2D, texture);
-    gl.defaultTextureParameters();
+
+    gl.textureClampToEdges();
+    gl.textureFilterNearest();
   }
+
+  // ---
+
+  var resizer = try av.FrameResizer.init(decoder.codec_context, 960, 540);
+  defer resizer.deinit();
 
   var pixels = std.ArrayList(u8).init(std.heap.c_allocator);
   defer pixels.deinit();
@@ -98,44 +85,24 @@ pub fn main() !void {
         if (c.glfwWindowShouldClose(window) == c.GLFW_TRUE)
           return;
 
-        try av.imageCopyToBuffer(frame, &pixels);
+        const resized = try resizer.resize(frame);
+        try av.imageCopyToBuffer(resized, &pixels);
+
+        defer c.glActiveTexture(c.GL_TEXTURE0);
+        defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+        c.glActiveTexture(c.GL_TEXTURE0);
+        c.glBindTexture(c.GL_TEXTURE_2D, texture);
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+          c.GL_RGB8, resized.width, resized.height, 0,
+          c.GL_RGB, c.GL_UNSIGNED_BYTE, pixels.items.ptr);
 
         defer c.glUseProgram(0);
-        defer c.glBindVertexArray(0);
-        defer c.glActiveTexture(c.GL_TEXTURE0);
-        defer for (textures) |_, index| {
-          c.glActiveTexture(gl.texture(index));
-          c.glBindTexture(c.GL_TEXTURE_2D, 0);
-        };
-
-        var ptr = pixels.items.ptr;
-        c.glActiveTexture(c.GL_TEXTURE0);
-        c.glBindTexture(c.GL_TEXTURE_2D, textures[0]);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_R8,
-          frame.width, frame.height,
-          0, c.GL_RED, c.GL_UNSIGNED_BYTE, ptr);
-
-        ptr += @intCast(usize, frame.width * frame.height);
-        c.glActiveTexture(c.GL_TEXTURE1);
-        c.glBindTexture(c.GL_TEXTURE_2D, textures[1]);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_R8,
-          @divExact(frame.width, 2), @divExact(frame.height, 2),
-          0, c.GL_RED, c.GL_UNSIGNED_BYTE, ptr);
-
-        ptr += @divExact(@intCast(usize, frame.width * frame.height), 4);
-        c.glActiveTexture(c.GL_TEXTURE2);
-        c.glBindTexture(c.GL_TEXTURE_2D, textures[2]);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0, c.GL_R8,
-          @divExact(frame.width, 2), @divExact(frame.height, 2),
-          0, c.GL_RED, c.GL_UNSIGNED_BYTE, ptr);
-
         c.glUseProgram(program.id);
+        c.glUniform1i(u_rgb, 0);
+
+        defer c.glBindVertexArray(0);
         c.glBindVertexArray(vao);
-        c.glUniform1i(u_channel_y, 0);
-        c.glUniform1i(u_channel_cb, 1);
-        c.glUniform1i(u_channel_cr, 2);
-        c.glClear(c.GL_COLOR_BUFFER_BIT);
-        c.glDrawArrays(c.GL_TRIANGLE_STRIP, 0, 4);
+        c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
 
         c.glfwSwapBuffers(window);
         c.glfwPollEvents();

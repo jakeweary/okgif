@@ -27,6 +27,7 @@ pub fn build(b: *std.build.Builder) void {
       exe.addObjectFile("deps/ffmpeg/lib/avcodec.lib");
       exe.addObjectFile("deps/ffmpeg/lib/avformat.lib");
       exe.addObjectFile("deps/ffmpeg/lib/avutil.lib");
+      exe.addObjectFile("deps/ffmpeg/lib/swscale.lib");
       exe.addObject(glad);
     },
     else => @panic("Unsupported OS")

@@ -11,47 +11,36 @@ packet: *c.AVPacket,
 frame: *c.AVFrame,
 
 pub fn init(file: [*:0]const u8) !Self {
-  c.av_register_all();
-
   var fmt_ctx: [*c]c.AVFormatContext = null;
-  if (c.avformat_open_input(&fmt_ctx, file, null, null) != 0)
-    return error.CannotOpenFile;
+  try av.checkError(c.avformat_open_input(&fmt_ctx, file, null, null));
   errdefer c.avformat_close_input(&fmt_ctx);
 
-  if (c.avformat_find_stream_info(fmt_ctx, null) < 0)
-    return error.CannotGetStreamInfo;
+  try av.checkError(c.avformat_find_stream_info(fmt_ctx, null));
+  const stream_index = c.av_find_best_stream(fmt_ctx, c.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
+  try av.checkError(stream_index);
+  const stream = fmt_ctx.*.streams[@intCast(usize, stream_index)];
 
-  const video = blk: {
-    const index = c.av_find_best_stream(fmt_ctx, c.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
-    if (index < 0)
-      return error.CannotFindVideoStreamInInputFile;
-    break :blk fmt_ctx.*.streams[@intCast(usize, index)];
-  };
+  const codec_params = stream.*.codecpar;
+  const codec = c.avcodec_find_decoder(codec_params.*.codec_id);
+  try av.checkNull(codec);
 
-  const codec_params = video.*.codecpar;
-  const codec = c.avcodec_find_decoder(codec_params.*.codec_id) orelse
-    return error.CannotFindDecoder;
-
-  var codec_ctx = c.avcodec_alloc_context3(codec) orelse
-    return error.CannotAllocateDecoderContext;
+  var codec_ctx = c.avcodec_alloc_context3(codec);
+  try av.checkNull(codec_ctx);
   errdefer c.avcodec_free_context(&codec_ctx);
 
-  if (c.avcodec_parameters_to_context(codec_ctx, codec_params) < 0)
-    return error.CannotCopyDecoderContext;
+  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, codec_params));
+  try av.checkError(c.avcodec_open2(codec_ctx, codec, null));
 
-  if (c.avcodec_open2(codec_ctx, codec, null) < 0)
-    return error.CannotOpenDecoder;
-
-  var frame = c.av_frame_alloc() orelse
-    return error.CannotAllocateFrame;
+  var frame = c.av_frame_alloc();
+  try av.checkNull(frame);
   errdefer c.av_frame_free(&frame);
 
-  var packet = c.av_packet_alloc() orelse
-    return error.CannotAllocatePacket;
+  var packet = c.av_packet_alloc();
+  try av.checkNull(packet);
   errdefer c.av_packet_free(&packet);
 
   return Self{
-    .video_stream = video,
+    .video_stream = stream,
     .format_context = fmt_ctx,
     .codec_context = codec_ctx,
     .packet = packet,
@@ -68,28 +57,25 @@ pub fn deinit(self: *Self) void {
 
 pub fn sendPacket(self: *Self) !void {
   const code = c.avcodec_send_packet(self.codec_context, self.packet);
-  if (code < 0) {
-    std.log.err("{s}", .{ av.strError(code) });
-    return error.ErrorWhileSendingAPacketToTheDecoder;
-  }
+  try av.checkError(code);
 }
 
 pub fn receiveFrame(self: *Self) !?*c.AVFrame {
-  return switch (c.avcodec_receive_frame(self.codec_context, self.frame)) {
-    c.AVERROR_EOF, c.AVERROR(c.EAGAIN) => null,
-    else => |code| if (code >= 0) self.frame else {
-      std.log.err("{s}", .{ av.strError(code) });
-      return error.ErrorWhileReceivingAFrameFromTheDecoder;
+  switch (c.avcodec_receive_frame(self.codec_context, self.frame)) {
+    c.AVERROR_EOF, c.AVERROR(c.EAGAIN) => return null,
+    else => |code| {
+      try av.checkError(code);
+      return self.frame;
     }
-  };
+  }
 }
 
 pub fn readFrame(self: *Self) !bool {
-  return switch (c.av_read_frame(self.format_context, self.packet)) {
-    c.AVERROR_EOF => false,
-    else => |code| if (code >= 0) true else {
-      std.log.err("{s}", .{ av.strError(code) });
-      return error.ErrorWhileReadingAFrameFromTheDecoder;
+  switch (c.av_read_frame(self.format_context, self.packet)) {
+    c.AVERROR_EOF => return false,
+    else => |code| {
+      try av.checkError(code);
+      return true;
     }
-  };
+  }
 }

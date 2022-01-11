@@ -106,15 +106,12 @@ fn perfectGrid(particles: *std.ArrayList(c.vec3), comptime n: comptime_int) !voi
 fn uniformlyRandomSphere(particles: *std.ArrayList(c.vec3), comptime n: comptime_int) !void {
   try particles.ensureTotalCapacity(n);
   var xs = Xorshift{};
-  var i: usize = 0;
-  while (i < n) {
+  while (particles.items.len < n) {
     const x = @floatCast(f32, xs.next(f64) - 0.5);
     const y = @floatCast(f32, xs.next(f64) - 0.5);
     const z = @floatCast(f32, xs.next(f64) - 0.5);
     var v: c.vec3 = .{ x, y, z };
-    if (c.vec3_len(&v) < 0.5) {
+    if (c.vec3_len(&v) < 0.5)
       try particles.append(v);
-      i += 1;
-    }
   }
 }
