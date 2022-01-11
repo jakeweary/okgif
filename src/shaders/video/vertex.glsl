@@ -1,5 +1,3 @@
-#version 460
-
 out vec2 vUV;
 
 void main() {

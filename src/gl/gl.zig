@@ -11,6 +11,11 @@ pub fn texture(index: anytype) c.GLenum {
   return @as(c.GLenum, c.GL_TEXTURE0) + @intCast(c.GLenum, index);
 }
 
+pub fn textureAlignment(param: c.GLint) void {
+  c.glPixelStorei(c.GL_PACK_ALIGNMENT, param);
+  c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, param);
+}
+
 pub fn textureClampToEdges() void {
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
@@ -24,4 +29,17 @@ pub fn textureFilterNearest() void {
 pub fn textureFilterLinear() void {
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
+}
+
+pub fn joinShaderSources(allocator: std.mem.Allocator, sources: []const []const u8) ![]const u8 {
+  var joined = std.ArrayList(u8).init(allocator);
+  defer joined.deinit();
+
+  try joined.appendSlice("#version 460\n");
+  for (sources) |source| {
+    try joined.append('\n');
+    try joined.appendSlice(source);
+  }
+
+  return joined.toOwnedSlice();
 }

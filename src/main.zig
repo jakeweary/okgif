@@ -5,6 +5,7 @@ const av = @import("av/av.zig");
 const gl = @import("gl/gl.zig");
 
 pub const log_level = .debug;
+pub const allocator = std.heap.c_allocator;
 
 pub fn main() !void {
   if (std.os.argv.len < 2) {
@@ -17,6 +18,10 @@ pub fn main() !void {
 
   var decoder = try av.VideoDecoder.init(filepath.ptr);
   defer decoder.deinit();
+
+  const cc = decoder.codec_context;
+  const width = @divTrunc(cc.width, 2);
+  const height = @divTrunc(cc.height, 2);
 
   // ---
 
@@ -31,7 +36,7 @@ pub fn main() !void {
   c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
   c.glfwWindowHint(c.GLFW_OPENGL_DEBUG_CONTEXT, c.GLFW_TRUE);
   // c.glfwWindowHint(c.GLFW_SAMPLES, 8);
-  const window = c.glfwCreateWindow(960, 540, filename.ptr, null, null)
+  const window = c.glfwCreateWindow(width, height, filename.ptr, null, null)
     orelse return error.GLFWCreateWindowError;
   defer c.glfwDestroyWindow(window);
 
@@ -46,9 +51,12 @@ pub fn main() !void {
 
   // ---
 
+  const srgb = @embedFile("shaders/sRGB.glsl");
+  const oklab = @embedFile("shaders/Oklab.glsl");
+
   const vs = @embedFile("shaders/video/vertex.glsl");
   const fs = @embedFile("shaders/video/fragment.glsl");
-  const program = try gl.Program.init(vs, fs);
+  const program = try gl.Program.init(vs, srgb ++ oklab ++ fs);
   defer program.deinit();
 
   const u_rgb = program.uniform("uRGB");
@@ -65,13 +73,14 @@ pub fn main() !void {
     defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
     c.glBindTexture(c.GL_TEXTURE_2D, texture);
 
-    gl.textureClampToEdges();
+    gl.textureAlignment(1);
     gl.textureFilterNearest();
+    gl.textureClampToEdges();
   }
 
   // ---
 
-  var resizer = try av.FrameResizer.init(decoder.codec_context, 960, 540);
+  var resizer = try av.FrameResizer.init(cc, width, height);
   defer resizer.deinit();
 
   var pixels = std.ArrayList(u8).init(std.heap.c_allocator);

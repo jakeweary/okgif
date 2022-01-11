@@ -1,5 +1,3 @@
-#version 460
-
 uniform ivec2 uViewport;
 uniform mat4 uMVP;
 in vec3 aPosition;

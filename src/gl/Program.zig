@@ -6,7 +6,7 @@ const Self = @This();
 
 id: c.GLuint,
 
-pub fn init(vertex: []const u8, fragment: []const u8) !Self {
+pub fn init(vertex: []const c.GLchar, fragment: []const c.GLchar) !Self {
   const vs = try Shader.init(c.GL_VERTEX_SHADER, vertex);
   errdefer vs.deinit();
 

@@ -1,5 +1,3 @@
-#version 460
-
 in float vAlpha;
 out vec4 fColor;
 

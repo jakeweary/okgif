@@ -5,18 +5,20 @@ const Self = @This();
 
 id: c.GLuint,
 
-pub fn init(kind: c.GLenum, source: []const u8) !Self {
+pub fn init(kind: c.GLenum, source: []const c.GLchar) !Self {
   const self = Self{ .id = c.glCreateShader(kind) };
   errdefer self.deinit();
 
-  const source_len = @intCast(c.GLint, source.len);
-  c.glShaderSource(self.id, 1, &source.ptr, &source_len);
+  const version = "#version 460\n";
+  const ptrs = [_][*]const c.GLchar{ version, source.ptr };
+  const lens = [_]c.GLint{ version.len, @intCast(c.GLint, source.len) };
+  c.glShaderSource(self.id, ptrs.len, &ptrs, &lens);
   c.glCompileShader(self.id);
 
   var status: c.GLint = undefined;
   c.glGetShaderiv(self.id, c.GL_COMPILE_STATUS, &status);
   if (status == c.GL_FALSE) {
-    var line_n: usize = 1;
+    var line_n: usize = 2;
     var lines = std.mem.split(u8, source, "\n");
     while (lines.next()) |line| : (line_n += 1)
       gl.log.debug("{:0>3}: {s}", .{ line_n, line });

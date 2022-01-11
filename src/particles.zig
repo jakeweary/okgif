@@ -1,10 +1,11 @@
+const root = @import("root");
 const c = @import("c.zig");
 const std = @import("std");
 const gl = @import("gl/gl.zig");
 const Xorshift = @import("Xorshift.zig");
 
 pub fn renderLoop(window: *c.GLFWwindow) !void {
-  var particles = std.ArrayList(c.vec3).init(std.heap.c_allocator);
+  var particles = std.ArrayList(c.vec3).init(root.allocator);
   defer particles.deinit();
 
   try perfectGrid(&particles, 200);
@@ -75,13 +76,15 @@ pub fn renderLoop(window: *c.GLFWwindow) !void {
     c.mat4x4_mul(&mvp, &view, &mvp);
     c.mat4x4_mul(&mvp, &proj, &mvp);
 
-    c.glClear(c.GL_COLOR_BUFFER_BIT);
-    c.glUseProgram(program.id);
     defer c.glUseProgram(0);
+    c.glUseProgram(program.id);
     c.glUniform2i(u_viewport, width, height);
     c.glUniformMatrix4fv(u_mvp, 1, c.GL_FALSE, @ptrCast([*c]const f32, &mvp));
-    c.glBindVertexArray(vao);
+
+    c.glClear(c.GL_COLOR_BUFFER_BIT);
+
     defer c.glBindVertexArray(0);
+    c.glBindVertexArray(vao);
     c.glDrawArrays(c.GL_POINTS, 0, @intCast(c_int, particles.items.len));
 
     c.glfwSwapBuffers(window);
