@@ -4,13 +4,13 @@ const gl = @import("gl.zig");
 pub fn checkError() !void {
   return switch (c.glGetError()) {
     c.GL_NO_ERROR => {},
-    c.GL_INVALID_ENUM => error.InvalidEnum,
-    c.GL_INVALID_FRAMEBUFFER_OPERATION => error.InvalidFramebufferOperation,
-    c.GL_INVALID_OPERATION => error.InvalidOperation,
-    c.GL_INVALID_VALUE => error.InvalidValue,
-    c.GL_OUT_OF_MEMORY => error.OutOfMemory,
-    c.GL_STACK_OVERFLOW => error.StackOverflow,
-    c.GL_STACK_UNDERFLOW => error.StackUnderflow,
+    c.GL_INVALID_ENUM => error.GL_InvalidEnum,
+    c.GL_INVALID_FRAMEBUFFER_OPERATION => error.GL_InvalidFramebufferOperation,
+    c.GL_INVALID_OPERATION => error.GL_InvalidOperation,
+    c.GL_INVALID_VALUE => error.GL_InvalidValue,
+    c.GL_OUT_OF_MEMORY => error.GL_OutOfMemory,
+    c.GL_STACK_OVERFLOW => error.GL_StackOverflow,
+    c.GL_STACK_UNDERFLOW => error.GL_StackUnderflow,
     else => unreachable
   };
 }
@@ -25,10 +25,10 @@ pub fn enableDebugMessages() void {
     c.glDebugMessageControl(c.GL_DONT_CARE, c.GL_DONT_CARE, c.GL_DONT_CARE, 0, null, c.GL_TRUE);
   }
 
-  gl.log.info("{s}", .{ c.glGetString(c.GL_VENDOR) });
-  gl.log.info("{s}", .{ c.glGetString(c.GL_RENDERER) });
-  gl.log.info("OpenGL {s}", .{ c.glGetString(c.GL_VERSION) });
-  gl.log.info("GLSL {s}", .{ c.glGetString(c.GL_SHADING_LANGUAGE_VERSION) });
+  gl.log.debug("{s}", .{ c.glGetString(c.GL_VENDOR) });
+  gl.log.debug("{s}", .{ c.glGetString(c.GL_RENDERER) });
+  gl.log.debug("OpenGL {s}", .{ c.glGetString(c.GL_VERSION) });
+  gl.log.debug("GLSL {s}", .{ c.glGetString(c.GL_SHADING_LANGUAGE_VERSION) });
 }
 
 pub fn debugMessageCallback(
@@ -40,7 +40,7 @@ pub fn debugMessageCallback(
   message: [*c]const c.GLchar,
   _: ?*const c.GLvoid
 ) callconv(.C) void {
-  const fmt = "{s} {s} {}: {s}";
+  const fmt = "{s} {s} 0x{x}: {s}";
   const args = .{
     switch (source) {
       c.GL_DEBUG_SOURCE_API => @as([]const u8, "API"),

@@ -14,7 +14,7 @@ pub fn init(cc: *c.AVCodecContext, width: c_int, height: c_int) !Self {
   frame.*.format = c.AV_PIX_FMT_RGB24;
   frame.*.width = width;
   frame.*.height = height;
-  try av.checkError(c.av_frame_get_buffer(frame, 0));
+  try av.checkError(c.av_frame_get_buffer(frame, 32));
 
   const sws_context = c.sws_getContext(
     cc.width, cc.height, cc.pix_fmt,

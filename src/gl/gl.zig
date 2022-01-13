@@ -11,11 +11,6 @@ pub fn texture(index: anytype) c.GLenum {
   return @as(c.GLenum, c.GL_TEXTURE0) + @intCast(c.GLenum, index);
 }
 
-pub fn textureAlignment(param: c.GLint) void {
-  c.glPixelStorei(c.GL_PACK_ALIGNMENT, param);
-  c.glPixelStorei(c.GL_UNPACK_ALIGNMENT, param);
-}
-
 pub fn textureClampToEdges() void {
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_S, c.GL_CLAMP_TO_EDGE);
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_WRAP_T, c.GL_CLAMP_TO_EDGE);
