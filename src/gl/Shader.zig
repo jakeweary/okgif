@@ -13,10 +13,11 @@ pub fn init(kind: c.GLenum, source: []const c.GLchar) !Self {
   const ptrs = [_][*]const c.GLchar{ version, source.ptr };
   const lens = [_]c.GLint{ version.len, @intCast(c.GLint, source.len) };
   c.glShaderSource(self.id, ptrs.len, &ptrs, &lens);
-  c.glCompileShader(self.id);
 
   var status: c.GLint = undefined;
+  c.glCompileShader(self.id);
   c.glGetShaderiv(self.id, c.GL_COMPILE_STATUS, &status);
+
   if (status == c.GL_FALSE) {
     var line_n: usize = 2;
     var lines = std.mem.split(u8, source, "\n");
