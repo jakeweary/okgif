@@ -4,13 +4,6 @@ pub fn build(b: *std.build.Builder) void {
   const target = b.standardTargetOptions(.{});
   const mode = b.standardReleaseOptions();
 
-  const glad = b.addObject("glad", null);
-  glad.setTarget(target);
-  glad.setBuildMode(mode);
-  glad.addIncludeDir("deps/include");
-  glad.addCSourceFile("deps/glad/gl.c", &.{});
-  glad.linkLibC();
-
   const exe = b.addExecutable("gl", "src/main.zig");
   exe.single_threaded = true;
   exe.setTarget(target);
@@ -18,6 +11,8 @@ pub fn build(b: *std.build.Builder) void {
   exe.linkLibC();
   exe.addIncludeDir("deps/include");
   exe.addIncludeDir("deps/ffmpeg/include");
+  exe.addCSourceFile("deps/glad.c", &.{ "-std=c99" });
+  exe.addCSourceFile("deps/stb_image.c", &.{ "-std=c99" });
   switch (exe.target.getOsTag()) {
     .windows => {
       exe.linkSystemLibrary("winmm");
@@ -28,7 +23,6 @@ pub fn build(b: *std.build.Builder) void {
       exe.addObjectFile("deps/ffmpeg/lib/avformat.lib");
       exe.addObjectFile("deps/ffmpeg/lib/avutil.lib");
       exe.addObjectFile("deps/ffmpeg/lib/swscale.lib");
-      exe.addObject(glad);
     },
     else => @panic("Unsupported OS")
   }

@@ -13,19 +13,19 @@ const mat3 M2 = mat3(
 );
 
 vec3 XYZ_to_Lab(vec3 XYZ) {
-  vec3 lms = M1*XYZ;
-  vec3 lms_p = sign(lms)*pow(abs(lms), vec3(1.0/3.0));
-  return M2*lms_p;
+  vec3 lms = M1 * XYZ;
+  vec3 lms_p = sign(lms) * pow(abs(lms), vec3(1.0 / 3.0));
+  return M2 * lms_p;
 }
 
 vec3 Lab_to_XYZ(vec3 Lab) {
-  vec3 lms_p = inverse(M2)*Lab;
-  vec3 lms = lms_p*lms_p*lms_p;
-  return inverse(M1)*lms;
+  vec3 lms_p = inverse(M2) * Lab;
+  vec3 lms = lms_p * lms_p * lms_p;
+  return inverse(M1) * lms;
 }
 
 vec3 LCh_to_Lab(vec3 LCh) {
-  return vec3(LCh.x, LCh.y*vec2(cos(LCh.z), sin(LCh.z)));
+  return vec3(LCh.x, LCh.y * vec2(cos(LCh.z), sin(LCh.z)));
 }
 
 vec3 Lab_to_LCh(vec3 Lab) {
@@ -33,11 +33,11 @@ vec3 Lab_to_LCh(vec3 Lab) {
 }
 
 vec3 sRGB_to_Lab(vec3 sRGB) {
-  return XYZ_to_Lab(sRGB_to_XYZ*sRGB);
+  return XYZ_to_Lab(sRGB_to_XYZ * sRGB);
 }
 
 vec3 Lab_to_sRGB(vec3 Luv) {
-  return XYZ_to_sRGB*Lab_to_XYZ(Luv);
+  return XYZ_to_sRGB * Lab_to_XYZ(Luv);
 }
 
 vec3 sRGB_to_LCh(vec3 sRGB) {
@@ -49,12 +49,12 @@ vec3 LCh_to_sRGB(vec3 LCh) {
 }
 
 float L_to_Lr(float L) {
-  const vec3 k = vec3(0.206, 0.03, 1.206/1.03);
-  float x = k.z*L - k.x;
-  return 0.5*(x + sqrt(x*x + 4.0*k.y*k.z*L));
+  const vec3 k = vec3(0.206, 0.03, 1.206 / 1.03);
+  float x = k.z * L - k.x;
+  return 0.5 * (x + sqrt(x * x + 4.0 * k.y * k.z * L));
 }
 
 float Lr_to_L(float Lr) {
-  const vec3 k = vec3(0.206, 0.03, 1.206/1.03);
-  return (Lr*(Lr + k.x))/(k.z*(Lr + k.y));
+  const vec3 k = vec3(0.206, 0.03, 1.206 / 1.03);
+  return (Lr * (Lr + k.x)) / (k.z * (Lr + k.y));
 }

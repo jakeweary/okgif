@@ -3,6 +3,7 @@ const std = @import("std");
 const util = @import("util.zig");
 const av = @import("av/av.zig");
 const gl = @import("gl/gl.zig");
+const stb = @import("stb/stb.zig");
 
 pub const log_level = .debug;
 pub const allocator = std.heap.c_allocator;
@@ -64,27 +65,38 @@ pub fn main() !void {
   const oklab = @embedFile("glsl/Oklab.glsl");
   const srgb = @embedFile("glsl/sRGB.glsl");
 
-  const vs1 = @embedFile("glsl/convert/vertex.glsl");
-  const fs1 = @embedFile("glsl/convert/fragment.glsl");
-  const p_convert = try gl.Program.init(vs1, srgb ++ oklab ++ fs1);
+  const p_convert = try blk: {
+    const vs = @embedFile("glsl/convert/vertex.glsl");
+    const fs = @embedFile("glsl/convert/fragment.glsl");
+    break :blk gl.Program.init(vs, srgb ++ oklab ++ fs);
+  };
   defer p_convert.deinit();
 
-  const vs2 = @embedFile("glsl/update/vertex.glsl");
-  const fs2 = @embedFile("glsl/update/fragment.glsl");
-  const p_update = try gl.Program.init(kmeans ++ vs2, fs2);
+  const p_update = try blk: {
+    const vs = @embedFile("glsl/update/vertex.glsl");
+    const fs = @embedFile("glsl/update/fragment.glsl");
+    break :blk gl.Program.init(kmeans ++ vs, fs);
+  };
   defer p_update.deinit();
 
-  const vs3 = @embedFile("glsl/reseed/vertex.glsl");
-  const fs3 = @embedFile("glsl/reseed/fragment.glsl");
-  const p_reseed = try gl.Program.init(vs3, hashes ++ fs3);
+  const p_reseed = try blk: {
+    const vs = @embedFile("glsl/reseed/vertex.glsl");
+    const fs = @embedFile("glsl/reseed/fragment.glsl");
+    break :blk gl.Program.init(vs, hashes ++ fs);
+  };
   defer p_reseed.deinit();
 
-  const vs4 = @embedFile("glsl/render/vertex.glsl");
-  const fs4 = @embedFile("glsl/render/fragment.glsl");
-  const p_render = try gl.Program.init(vs4, hashes ++ kmeans ++ srgb ++ oklab ++ fs4);
+  const p_render = try blk: {
+    const vs = @embedFile("glsl/render/vertex.glsl");
+    const fs = @embedFile("glsl/render/fragment.glsl");
+    break :blk gl.Program.init(vs, kmeans ++ srgb ++ oklab ++ fs);
+  };
   defer p_render.deinit();
 
   // ---
+
+  const K = 64;
+  var means = std.mem.zeroes([4 * K]c.GLfloat);
 
   var vao: c.GLuint = undefined;
   c.glGenVertexArrays(1, &vao);
@@ -94,37 +106,42 @@ pub fn main() !void {
   c.glGenFramebuffers(1, &fbo);
   defer c.glDeleteFramebuffers(1, &fbo);
 
-  var textures: [4]c.GLuint = undefined;
+  var textures: [5]c.GLuint = undefined;
   c.glGenTextures(textures.len, &textures);
   defer c.glDeleteTextures(textures.len, &textures);
 
-  const t_source = textures[0];
-  const t_converted = textures[1];
-  const t_palettes = textures[2..4];
-
-  const K = 64;
-  var means = std.mem.zeroes([4 * K]c.GLfloat);
+  const t_means = textures[0..2];
+  const t_source = textures[2];
+  const t_converted = textures[3];
+  const t_noise = textures[4];
 
   {
+    const png = @embedFile("../deps/blue_noise.png");
+    const noise = try stb.Image.fromMemory(png);
+    defer noise.deinit();
+
     defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
 
     for (textures) |texture| {
       c.glBindTexture(c.GL_TEXTURE_2D, texture);
       gl.textureFilterNearest();
-      gl.textureClampToEdges();
     }
 
-    for (t_palettes) |texture| {
+    for (t_means) |texture| {
       c.glBindTexture(c.GL_TEXTURE_2D, texture);
       c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-        c.GL_RGBA32F, K, 1, 0,
-        c.GL_RGBA, c.GL_FLOAT, null);
+        c.GL_RGBA32F, K, 1, 0, c.GL_RGBA, c.GL_FLOAT, null);
     }
 
     c.glBindTexture(c.GL_TEXTURE_2D, t_converted);
     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
       c.GL_RGB32F, resizer.frame.width, resizer.frame.height, 0,
       c.GL_RGB, c.GL_FLOAT, null);
+
+    c.glBindTexture(c.GL_TEXTURE_2D, t_noise);
+    c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+      c.GL_RGBA8, @intCast(c.GLint, noise.width), @intCast(c.GLint, noise.height), 0,
+      c.GL_RGBA, c.GL_UNSIGNED_BYTE, noise.data.ptr);
   }
 
   while (try decoder.readFrame()) {
@@ -138,8 +155,6 @@ pub fn main() !void {
         defer c.glBindVertexArray(0);
         c.glBindVertexArray(vao);
 
-        const time = @floatCast(c.GLfloat, c.glfwGetTime());
-
         // step 0: convert to sRGB
         const resized = try resizer.resize(frame);
         const row_length = @divExact(resizer.frame.linesize[0], 3);
@@ -148,8 +163,7 @@ pub fn main() !void {
         {
           defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
           c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-          c.glFramebufferTexture2D(c.GL_FRAMEBUFFER,
-            c.GL_COLOR_ATTACHMENT0, c.GL_TEXTURE_2D, t_converted, 0);
+          c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_converted, 0);
 
           defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
           c.glBindTexture(c.GL_TEXTURE_2D, t_source);
@@ -162,23 +176,21 @@ pub fn main() !void {
           c.glUseProgram(p_convert.id);
           c.glUniform1i(p_convert.uniform("tFrame"), 0);
 
-          c.glViewport(0, 0, scaled.width, scaled.height);
+          c.glViewport(0, 0, resized.width, resized.height);
           c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
         }
 
         // step 2: update means
         {
+          defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
+          c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+          c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[0], 0);
+
           defer c.glDisable(c.GL_BLEND);
           c.glEnable(c.GL_BLEND);
           c.glBlendFunc(c.GL_ONE, c.GL_ONE);
 
-          defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
-          c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-          c.glFramebufferTexture2D(c.GL_FRAMEBUFFER,
-            c.GL_COLOR_ATTACHMENT0, c.GL_TEXTURE_2D, t_palettes[0], 0);
-
-          defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_converted);
+          c.glBindTextureUnit(0, t_converted);
 
           defer c.glUseProgram(0);
           c.glUseProgram(p_update.id);
@@ -187,28 +199,23 @@ pub fn main() !void {
 
           c.glViewport(0, 0, K, 1);
           c.glClear(c.GL_COLOR_BUFFER_BIT);
-          c.glDrawArrays(c.GL_POINTS, 0, scaled.width * scaled.height);
+          c.glDrawArrays(c.GL_POINTS, 0, resized.width * resized.height);
         }
 
         // step 3: reseed and read means
         {
           defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
           c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-          c.glFramebufferTexture2D(c.GL_FRAMEBUFFER,
-            c.GL_COLOR_ATTACHMENT0, c.GL_TEXTURE_2D, t_palettes[1], 0);
+          c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
 
-          defer c.glActiveTexture(c.GL_TEXTURE0);
-          defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-          c.glActiveTexture(c.GL_TEXTURE0);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_converted);
-          c.glActiveTexture(c.GL_TEXTURE1);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_palettes[0]);
+          c.glBindTextureUnit(0, t_converted);
+          c.glBindTextureUnit(1, t_means[0]);
 
           defer c.glUseProgram(0);
           c.glUseProgram(p_reseed.id);
           c.glUniform1i(p_reseed.uniform("tFrame"), 0);
           c.glUniform1i(p_reseed.uniform("tMeans"), 1);
-          c.glUniform1f(p_reseed.uniform("uTime"), time);
+          c.glUniform1f(p_reseed.uniform("uTime"), @floatCast(c.GLfloat, c.glfwGetTime()));
 
           c.glViewport(0, 0, K, 1);
           c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
@@ -220,21 +227,15 @@ pub fn main() !void {
           defer c.glDisable(c.GL_FRAMEBUFFER_SRGB);
           c.glEnable(c.GL_FRAMEBUFFER_SRGB);
 
-          defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_converted);
-
-          defer c.glActiveTexture(c.GL_TEXTURE0);
-          defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-          c.glActiveTexture(c.GL_TEXTURE0);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_converted);
-          c.glActiveTexture(c.GL_TEXTURE1);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_palettes[1]);
+          c.glBindTextureUnit(0, t_converted);
+          c.glBindTextureUnit(1, t_means[1]);
+          c.glBindTextureUnit(2, t_noise);
 
           defer c.glUseProgram(0);
           c.glUseProgram(p_render.id);
           c.glUniform1i(p_render.uniform("tFrame"), 0);
           c.glUniform1i(p_render.uniform("tMeans"), 1);
-          c.glUniform1f(p_render.uniform("uTime"), time);
+          c.glUniform1i(p_render.uniform("tNoise"), 2);
           c.glUniform4fv(p_render.uniform("uMeans"), K, &means);
 
           c.glViewport(0, 0, scaled.width, scaled.height);
