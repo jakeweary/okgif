@@ -19,7 +19,7 @@ pub fn init(cc: *c.AVCodecContext, width: c_int, height: c_int) !Self {
   const sws_context = c.sws_getContext(
     cc.width, cc.height, cc.pix_fmt,
     width, height, frame.*.format,
-    c.SWS_BILINEAR, null, null, null
+    c.SWS_BICUBIC, null, null, null
   );
   try av.checkNull(sws_context);
   errdefer c.sws_freeContext(sws_context);

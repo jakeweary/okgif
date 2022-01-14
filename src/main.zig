@@ -45,7 +45,6 @@ pub fn main() !void {
   c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 6);
   c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
   c.glfwWindowHint(c.GLFW_OPENGL_DEBUG_CONTEXT, c.GLFW_TRUE);
-  // c.glfwWindowHint(c.GLFW_SAMPLES, 8);
   const window = c.glfwCreateWindow(scaled.width, scaled.height, filename.ptr, null, null)
     orelse return error.GLFW_CreateWindowError;
   defer c.glfwDestroyWindow(window);
@@ -96,7 +95,7 @@ pub fn main() !void {
   // ---
 
   const K = 64;
-  var means = std.mem.zeroes([4 * K]c.GLfloat);
+  var means = std.mem.zeroes([K][4]c.GLfloat);
 
   var vao: c.GLuint = undefined;
   c.glGenVertexArrays(1, &vao);
@@ -148,41 +147,40 @@ pub fn main() !void {
     defer c.av_packet_unref(decoder.packet);
     if (decoder.packet.stream_index == decoder.video_stream.index) {
       try decoder.sendPacket();
-      while (try decoder.receiveFrame()) |frame| {
+      while (try decoder.receiveFrame()) |fullsize_frame| {
         if (c.glfwWindowShouldClose(window) == c.GLFW_TRUE)
           return;
 
+        defer c.glUseProgram(0);
         defer c.glBindVertexArray(0);
         c.glBindVertexArray(vao);
 
-        // step 0: convert to sRGB
-        const resized = try resizer.resize(frame);
-        const row_length = @divExact(resizer.frame.linesize[0], 3);
+        // step 1: resize and convert to sRGB
+        const frame = try resizer.resize(fullsize_frame);
 
-        // step 1: convert to Oklab
         {
-          defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
+          defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+          c.glBindTexture(c.GL_TEXTURE_2D, t_source);
+          c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, @divExact(frame.linesize[0], 3));
+          c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+            c.GL_SRGB8, frame.width, frame.height, 0,
+            c.GL_RGB, c.GL_UNSIGNED_BYTE, frame.data[0]);
+        }
+
+        // step 2: convert to Oklab
+        {
           c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
           c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_converted, 0);
 
-          defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-          c.glBindTexture(c.GL_TEXTURE_2D, t_source);
-          c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, row_length);
-          c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-            c.GL_SRGB8, resized.width, resized.height, 0,
-            c.GL_RGB, c.GL_UNSIGNED_BYTE, resized.data[0]);
+          p_convert.use();
+          p_convert.bindTexture("tFrame", 0, t_source);
 
-          defer c.glUseProgram(0);
-          c.glUseProgram(p_convert.id);
-          c.glUniform1i(p_convert.uniform("tFrame"), 0);
-
-          c.glViewport(0, 0, resized.width, resized.height);
+          c.glViewport(0, 0, frame.width, frame.height);
           c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
         }
 
-        // step 2: update means
+        // step 3: update means
         {
-          defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
           c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
           c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[0], 0);
 
@@ -190,55 +188,45 @@ pub fn main() !void {
           c.glEnable(c.GL_BLEND);
           c.glBlendFunc(c.GL_ONE, c.GL_ONE);
 
-          c.glBindTextureUnit(0, t_converted);
-
-          defer c.glUseProgram(0);
-          c.glUseProgram(p_update.id);
-          c.glUniform1i(p_update.uniform("tFrame"), 0);
-          c.glUniform4fv(p_update.uniform("uMeans"), K, &means);
+          p_update.use();
+          p_update.bind("uMeans", &means);
+          p_update.bindTexture("tFrame", 0, t_converted);
 
           c.glViewport(0, 0, K, 1);
           c.glClear(c.GL_COLOR_BUFFER_BIT);
-          c.glDrawArrays(c.GL_POINTS, 0, resized.width * resized.height);
+          c.glDrawArrays(c.GL_POINTS, 0, frame.width * frame.height);
         }
 
-        // step 3: reseed and read means
+        // step 4: reseed and read means
         {
-          defer c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
           c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
           c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
 
-          c.glBindTextureUnit(0, t_converted);
-          c.glBindTextureUnit(1, t_means[0]);
-
-          defer c.glUseProgram(0);
-          c.glUseProgram(p_reseed.id);
-          c.glUniform1i(p_reseed.uniform("tFrame"), 0);
-          c.glUniform1i(p_reseed.uniform("tMeans"), 1);
-          c.glUniform1f(p_reseed.uniform("uTime"), @floatCast(c.GLfloat, c.glfwGetTime()));
+          p_reseed.use();
+          p_reseed.bind("uTime", c.glfwGetTime());
+          p_reseed.bindTexture("tFrame", 0, t_converted);
+          p_reseed.bindTexture("tMeans", 1, t_means[0]);
 
           c.glViewport(0, 0, K, 1);
           c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+
           c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
         }
 
-        // step 4: render gif preview
+        // step 5: render gif preview
         {
+          c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
+
           defer c.glDisable(c.GL_FRAMEBUFFER_SRGB);
           c.glEnable(c.GL_FRAMEBUFFER_SRGB);
 
-          c.glBindTextureUnit(0, t_converted);
-          c.glBindTextureUnit(1, t_means[1]);
-          c.glBindTextureUnit(2, t_noise);
+          p_render.use();
+          p_render.bind("uMeans", &means);
+          p_render.bindTexture("tFrame", 0, t_converted);
+          p_render.bindTexture("tMeans", 1, t_means[1]);
+          p_render.bindTexture("tNoise", 2, t_noise);
 
-          defer c.glUseProgram(0);
-          c.glUseProgram(p_render.id);
-          c.glUniform1i(p_render.uniform("tFrame"), 0);
-          c.glUniform1i(p_render.uniform("tMeans"), 1);
-          c.glUniform1i(p_render.uniform("tNoise"), 2);
-          c.glUniform4fv(p_render.uniform("uMeans"), K, &means);
-
-          c.glViewport(0, 0, scaled.width, scaled.height);
+          c.glViewport(0, 0, frame.width, frame.height);
           c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
         }
 
