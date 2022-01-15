@@ -11,14 +11,14 @@ pub fn build(b: *std.build.Builder) void {
   exe.linkLibC();
   exe.addIncludeDir("deps/include");
   exe.addIncludeDir("deps/ffmpeg/include");
-  exe.addCSourceFile("deps/glad.c", &.{ "-std=c99" });
-  exe.addCSourceFile("deps/stb_image.c", &.{ "-std=c99" });
+  exe.addCSourceFile("deps/glad.c", &.{});
+  exe.addCSourceFile("deps/stb_image.c", &.{});
   switch (exe.target.getOsTag()) {
     .windows => {
       exe.linkSystemLibrary("winmm");
       exe.linkSystemLibrary("gdi32");
       exe.linkSystemLibrary("opengl32");
-      exe.addObjectFile("deps/lib/libglfw3.a");
+      exe.addObjectFile("deps/lib/glfw3.lib");
       exe.addObjectFile("deps/ffmpeg/lib/avcodec.lib");
       exe.addObjectFile("deps/ffmpeg/lib/avformat.lib");
       exe.addObjectFile("deps/ffmpeg/lib/avutil.lib");
