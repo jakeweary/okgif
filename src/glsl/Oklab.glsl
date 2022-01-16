@@ -36,8 +36,8 @@ vec3 sRGB_to_Lab(vec3 sRGB) {
   return XYZ_to_Lab(sRGB_to_XYZ * sRGB);
 }
 
-vec3 Lab_to_sRGB(vec3 Luv) {
-  return XYZ_to_sRGB * Lab_to_XYZ(Luv);
+vec3 Lab_to_sRGB(vec3 Lab) {
+  return XYZ_to_sRGB * Lab_to_XYZ(Lab);
 }
 
 vec3 sRGB_to_LCh(vec3 sRGB) {

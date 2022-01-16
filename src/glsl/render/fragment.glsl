@@ -1,4 +1,4 @@
-// dependencies: kmeans, Oklab
+// dependencies: kmeans, UCS
 
 uniform sampler2D tFrame;
 uniform sampler2D tMeans;
@@ -14,15 +14,13 @@ void main() {
 
   if (0.0 <= min(uv.x, uv.y) && max(uv.x, uv.y) <= 1.0) {
     float x = (floor(grid.y * uv.y) + uv.x) / grid.y;
-    vec4 lab = texture(tMeans, vec2(x, 0.5));
-    vec3 rgb = Lab_to_sRGB(lab.xyz);
-    fColor = vec4(rgb, 1.0);
+    vec3 ucs = texture(tMeans, vec2(x, 0.5)).xyz;
+    fColor = vec4(UCS_to_sRGB(ucs), 1.0);
   }
   else {
     vec4 noise = texture(tNoise, fs / ns * vUV);
-    vec3 dither = 0.075 * (noise.xyz - 0.5);
-    vec3 lab = uMeans[closest(texture(tFrame, vUV).xyz + dither)].xyz;
-    vec3 rgb = Lab_to_sRGB(lab);
-    fColor = vec4(rgb, 1.0);
+    vec3 dither = 0.05 * (noise.xyz - 0.5);
+    vec3 ucs = uMeans[closest(texture(tFrame, vUV).xyz + dither)].xyz;
+    fColor = vec4(UCS_to_sRGB(ucs), 1.0);
   }
 }

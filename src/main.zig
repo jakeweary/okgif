@@ -63,11 +63,12 @@ pub fn main() !void {
   const kmeans = @embedFile("glsl/kmeans.glsl");
   const oklab = @embedFile("glsl/Oklab.glsl");
   const srgb = @embedFile("glsl/sRGB.glsl");
+  const ucs = @embedFile("glsl/UCS.glsl");
 
   const p_convert = try blk: {
     const vs = @embedFile("glsl/convert/vertex.glsl");
     const fs = @embedFile("glsl/convert/fragment.glsl");
-    break :blk gl.Program.init(vs, srgb ++ oklab ++ fs);
+    break :blk gl.Program.init(vs, srgb ++ oklab ++ ucs ++ fs);
   };
   defer p_convert.deinit();
 
@@ -88,7 +89,7 @@ pub fn main() !void {
   const p_render = try blk: {
     const vs = @embedFile("glsl/render/vertex.glsl");
     const fs = @embedFile("glsl/render/fragment.glsl");
-    break :blk gl.Program.init(vs, kmeans ++ srgb ++ oklab ++ fs);
+    break :blk gl.Program.init(vs, kmeans ++ srgb ++ oklab ++ ucs ++ fs);
   };
   defer p_render.deinit();
 
