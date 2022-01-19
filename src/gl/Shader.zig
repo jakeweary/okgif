@@ -28,7 +28,7 @@ pub fn init(kind: c.GLenum, source: []const c.GLchar) !Self {
     c.glGetShaderInfoLog(self.id, info.len, null, &info);
     gl.log.err("{s}", .{ @as([*:0]c.GLchar, &info) });
 
-    return error.ShaderCompilationError;
+    return error.GL_CompileShaderError;
   }
 
   return self;

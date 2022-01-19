@@ -59,36 +59,43 @@ pub fn main() !void {
 
   // ---
 
-  const hashes = @embedFile("glsl/hashes.glsl");
-  const kmeans = @embedFile("glsl/kmeans.glsl");
-  const oklab = @embedFile("glsl/Oklab.glsl");
-  const srgb = @embedFile("glsl/sRGB.glsl");
-  const ucs = @embedFile("glsl/UCS.glsl");
+  const hashes = @embedFile("glsl/lib/hashes.glsl");
+  const kmeans = @embedFile("glsl/lib/kmeans.glsl");
+  const oklab = @embedFile("glsl/lib/Oklab.glsl");
+  const srgb = @embedFile("glsl/lib/sRGB.glsl");
+  const ucs = @embedFile("glsl/lib/UCS.glsl");
 
-  const p_convert = try blk: {
-    const vs = @embedFile("glsl/convert/vertex.glsl");
-    const fs = @embedFile("glsl/convert/fragment.glsl");
+  const p_convert_to_rgb = try blk: {
+    const vs = @embedFile("glsl/pass/convert_to_rgb/vertex.glsl");
+    const fs = @embedFile("glsl/pass/convert_to_rgb/fragment.glsl");
+    break :blk gl.Program.init(vs, srgb ++ fs);
+  };
+  defer p_convert_to_rgb.deinit();
+
+  const p_convert_to_ucs = try blk: {
+    const vs = @embedFile("glsl/pass/convert_to_ucs/vertex.glsl");
+    const fs = @embedFile("glsl/pass/convert_to_ucs/fragment.glsl");
     break :blk gl.Program.init(vs, srgb ++ oklab ++ ucs ++ fs);
   };
-  defer p_convert.deinit();
+  defer p_convert_to_ucs.deinit();
 
-  const p_update = try blk: {
-    const vs = @embedFile("glsl/update/vertex.glsl");
-    const fs = @embedFile("glsl/update/fragment.glsl");
+  const p_means_update = try blk: {
+    const vs = @embedFile("glsl/pass/means_update/vertex.glsl");
+    const fs = @embedFile("glsl/pass/means_update/fragment.glsl");
     break :blk gl.Program.init(kmeans ++ vs, fs);
   };
-  defer p_update.deinit();
+  defer p_means_update.deinit();
 
-  const p_reseed = try blk: {
-    const vs = @embedFile("glsl/reseed/vertex.glsl");
-    const fs = @embedFile("glsl/reseed/fragment.glsl");
+  const p_means_reseed = try blk: {
+    const vs = @embedFile("glsl/pass/means_reseed/vertex.glsl");
+    const fs = @embedFile("glsl/pass/means_reseed/fragment.glsl");
     break :blk gl.Program.init(vs, hashes ++ fs);
   };
-  defer p_reseed.deinit();
+  defer p_means_reseed.deinit();
 
   const p_render = try blk: {
-    const vs = @embedFile("glsl/render/vertex.glsl");
-    const fs = @embedFile("glsl/render/fragment.glsl");
+    const vs = @embedFile("glsl/pass/render/vertex.glsl");
+    const fs = @embedFile("glsl/pass/render/fragment.glsl");
     break :blk gl.Program.init(vs, kmeans ++ srgb ++ oklab ++ ucs ++ fs);
   };
   defer p_render.deinit();
@@ -106,34 +113,40 @@ pub fn main() !void {
   c.glGenFramebuffers(1, &fbo);
   defer c.glDeleteFramebuffers(1, &fbo);
 
-  var textures: [5]c.GLuint = undefined;
+  var textures: [8]c.GLuint = undefined;
   c.glGenTextures(textures.len, &textures);
   defer c.glDeleteTextures(textures.len, &textures);
 
   const t_means = textures[0..2];
-  const t_source = textures[2];
-  const t_converted = textures[3];
-  const t_noise = textures[4];
+  const t_ycbcr = textures[2..5];
+  const t_rgb = textures[5];
+  const t_ucs = textures[6];
+  const t_noise = textures[7];
 
   {
-    const png = @embedFile("../deps/bluenoise_64_64/LDR_RGB1_0.png");
+    const png = @embedFile("../deps/bluenoise_64x64/LDR_RGB1_0.png");
     const noise = try stb.Image.fromMemory(png);
     defer noise.deinit();
 
     defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
 
-    for (textures) |texture| {
-      c.glBindTexture(c.GL_TEXTURE_2D, texture);
+    for (textures) |id| {
+      c.glBindTexture(c.GL_TEXTURE_2D, id);
       gl.textureFilterNearest();
     }
 
-    for (t_means) |texture| {
-      c.glBindTexture(c.GL_TEXTURE_2D, texture);
+    for (t_ycbcr) |id| {
+      c.glBindTexture(c.GL_TEXTURE_2D, id);
+      gl.textureFilterLinear();
+    }
+
+    for (t_means) |id| {
+      c.glBindTexture(c.GL_TEXTURE_2D, id);
       c.glTexImage2D(c.GL_TEXTURE_2D, 0,
         c.GL_RGBA32F, K, 1, 0, c.GL_RGBA, c.GL_FLOAT, null);
     }
 
-    c.glBindTexture(c.GL_TEXTURE_2D, t_converted);
+    c.glBindTexture(c.GL_TEXTURE_2D, t_ucs);
     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
       c.GL_RGB32F, resizer.frame.width, resizer.frame.height, 0,
       c.GL_RGB, c.GL_FLOAT, null);
@@ -144,7 +157,9 @@ pub fn main() !void {
       c.GL_RGBA, c.GL_UNSIGNED_BYTE, noise.data.ptr);
   }
 
-  while (try decoder.nextFrame()) |fullsize_frame| {
+  // ---
+
+  while (try decoder.nextFrame()) |frame| {
     if (c.glfwWindowShouldClose(window) == c.GLFW_TRUE)
       return;
 
@@ -152,27 +167,59 @@ pub fn main() !void {
     defer c.glBindVertexArray(0);
     c.glBindVertexArray(vao);
 
-    // step 1: resize and convert to sRGB
-    const frame = try resizer.resize(fullsize_frame);
+    // // step 1: resize and convert to sRGB (on CPU)
+    // {
+    //   const resized = try resizer.resize(frame);
 
-    {
-      defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-      c.glBindTexture(c.GL_TEXTURE_2D, t_source);
-      c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, @divExact(frame.linesize[0], 3));
-      c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-        c.GL_SRGB8, frame.width, frame.height, 0,
-        c.GL_RGB, c.GL_UNSIGNED_BYTE, frame.data[0]);
-    }
+    //   defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+    //   defer c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, 0);
 
-    // step 2: convert to Oklab
+    //   c.glBindTexture(c.GL_TEXTURE_2D, t_rgb);
+    //   c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, @divExact(resized.linesize[0], 3));
+    //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+    //     c.GL_SRGB8, resized.width, resized.height, 0,
+    //     c.GL_RGB, c.GL_UNSIGNED_BYTE, resized.data[0]);
+    // }
+
+    // step 1: resize and convert to sRGB (on GPU)
     {
       c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_converted, 0);
+      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_rgb, 0);
 
-      p_convert.use();
-      p_convert.bindTexture("tFrame", 0, t_source);
+      defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+      defer c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, 0);
 
-      c.glViewport(0, 0, frame.width, frame.height);
+      c.glBindTexture(c.GL_TEXTURE_2D, t_rgb);
+      c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+        c.GL_SRGB8, scaled.width, scaled.height, 0,
+        c.GL_RGB, c.GL_UNSIGNED_BYTE, null);
+
+      for ([_]c_int{ 1, 2, 2 }) |n, i| {
+        c.glBindTexture(c.GL_TEXTURE_2D, t_ycbcr[i]);
+        c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, frame.linesize[i]);
+        c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+          c.GL_R8, @divTrunc(frame.width, n), @divTrunc(frame.height, n), 0,
+          c.GL_RED, c.GL_UNSIGNED_BYTE, frame.data[i]);
+      }
+
+      p_convert_to_rgb.use();
+      p_convert_to_rgb.bindTexture("tY", 0, t_ycbcr[0]);
+      p_convert_to_rgb.bindTexture("tCb", 1, t_ycbcr[1]);
+      p_convert_to_rgb.bindTexture("tCr", 2, t_ycbcr[2]);
+
+      c.glViewport(0, 0, scaled.width, scaled.height);
+      c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+    }
+
+    // step 2: convert to UCS
+    {
+      c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_ucs, 0);
+
+      p_convert_to_ucs.use();
+      p_convert_to_ucs.bindTexture("tFrame", 0, t_rgb);
+
+      c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
     }
 
@@ -185,13 +232,13 @@ pub fn main() !void {
       c.glEnable(c.GL_BLEND);
       c.glBlendFunc(c.GL_ONE, c.GL_ONE);
 
-      p_update.use();
-      p_update.bind("uMeans", &means);
-      p_update.bindTexture("tFrame", 0, t_converted);
+      p_means_update.use();
+      p_means_update.bind("uMeans", &means);
+      p_means_update.bindTexture("tFrame", 0, t_ucs);
 
       c.glViewport(0, 0, K, 1);
       c.glClear(c.GL_COLOR_BUFFER_BIT);
-      c.glDrawArrays(c.GL_POINTS, 0, frame.width * frame.height);
+      c.glDrawArrays(c.GL_POINTS, 0, scaled.width * scaled.height);
     }
 
     // step 4: reseed and read means
@@ -199,10 +246,10 @@ pub fn main() !void {
       c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
       c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
 
-      p_reseed.use();
-      p_reseed.bind("uTime", c.glfwGetTime());
-      p_reseed.bindTexture("tFrame", 0, t_converted);
-      p_reseed.bindTexture("tMeans", 1, t_means[0]);
+      p_means_reseed.use();
+      p_means_reseed.bind("uTime", c.glfwGetTime());
+      p_means_reseed.bindTexture("tFrame", 0, t_ucs);
+      p_means_reseed.bindTexture("tMeans", 1, t_means[0]);
 
       c.glViewport(0, 0, K, 1);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
@@ -219,11 +266,11 @@ pub fn main() !void {
 
       p_render.use();
       p_render.bind("uMeans", &means);
-      p_render.bindTexture("tFrame", 0, t_converted);
+      p_render.bindTexture("tFrame", 0, t_ucs);
       p_render.bindTexture("tMeans", 1, t_means[1]);
       p_render.bindTexture("tNoise", 2, t_noise);
 
-      c.glViewport(0, 0, frame.width, frame.height);
+      c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
     }
 

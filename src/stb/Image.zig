@@ -15,7 +15,7 @@ pub fn fromMemory(bytes: []const u8) !Self {
   const len = @intCast(c_int, bytes.len);
   const data = c.stbi_load_from_memory(bytes.ptr, len, &w, &h, &n, 0) orelse {
     stb.log.err("{s}", .{ c.stbi_failure_reason() });
-    return error.STB_LoadError;
+    return error.STB_LoadImageError;
   };
 
   return Self{

@@ -20,11 +20,19 @@ pub fn init(file: [*:0]const u8) !Self {
   try av.checkError(c.avformat_find_stream_info(fmt_ctx, null));
   const stream_index = c.av_find_best_stream(fmt_ctx, c.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
   try av.checkError(stream_index);
-  const stream = fmt_ctx.*.streams[@intCast(usize, stream_index)];
 
+  const stream = fmt_ctx.*.streams[@intCast(usize, stream_index)];
   const codec_params = stream.*.codecpar;
+
+  const pix_fmt = c.av_get_pix_fmt_name(codec_params.*.format);
+  const width = codec_params.*.width;
+  const height = codec_params.*.height;
+  av.log.debug("Stream: {s} {}x{}", .{ pix_fmt, width, height });
+
   const codec = c.avcodec_find_decoder(codec_params.*.codec_id);
   try av.checkNull(codec);
+
+  av.log.debug("Codec: {s}", .{ codec.*.name });
 
   var codec_ctx = c.avcodec_alloc_context3(codec);
   try av.checkNull(codec_ctx);

@@ -29,7 +29,7 @@ pub fn link(self: *const Self) !gl.Program {
     c.glGetProgramInfoLog(self.id, info.len, null, &info);
     gl.log.err("{s}", .{ @as([*:0]c.GLchar, &info) });
 
-    return error.ProgramLinkageError;
+    return error.GL_LinkProgramError;
   }
 
   return gl.Program{ .id = self.id };

@@ -19,7 +19,7 @@ void main() {
   }
   else {
     vec4 noise = texture(tNoise, fs / ns * vUV);
-    vec3 dither = 0.05 * (noise.xyz - 0.5);
+    vec3 dither = 0.075 * (noise.xyz - 0.5);
     vec3 ucs = uMeans[closest(texture(tFrame, vUV).xyz + dither)].xyz;
     fColor = vec4(UCS_to_sRGB(ucs), 1.0);
   }

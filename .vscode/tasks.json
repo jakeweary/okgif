@@ -5,7 +5,7 @@
       "label": "build (windows)",
       "type": "process",
       "command": "zig",
-      "args": ["build", "-Dtarget=x86_64-windows-gnu", "run"],
+      "args": ["build", "run"],
       "problemMatcher": [],
       "group": {
         "kind": "build",
@@ -16,7 +16,7 @@
       "label": "build (windows, release)",
       "type": "process",
       "command": "zig",
-      "args": ["build", "-Dtarget=x86_64-windows-gnu", "-Drelease-fast=true", "run"],
+      "args": ["build", "-Drelease-fast=true", "run"],
       "problemMatcher": [],
       "group": "build"
     }

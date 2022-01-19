@@ -1,20 +1,20 @@
 const std = @import("std");
 
 pub fn build(b: *std.build.Builder) void {
-  const target = b.standardTargetOptions(.{});
   const mode = b.standardReleaseOptions();
+  const target = b.standardTargetOptions(.{
+    .default_target = .{ .os_tag = .windows }
+  });
 
   const exe = b.addExecutable("gl", "src/main.zig");
   exe.single_threaded = true;
   exe.setTarget(target);
   exe.setBuildMode(mode);
-  exe.linkLibC();
   exe.addLibPath("deps/lib");
   exe.addLibPath("deps/ffmpeg/lib");
   exe.addIncludeDir("deps/include");
   exe.addIncludeDir("deps/ffmpeg/include");
-  exe.addCSourceFile("deps/glad.c", &.{"-std=c99"});
-  exe.addCSourceFile("deps/stb_image.c", &.{"-std=c99"});
+  exe.addCSourceFile("deps/impl.c", &.{"-std=c99"});
   exe.linkSystemLibrary("glfw3");
   exe.linkSystemLibrary("avcodec");
   exe.linkSystemLibrary("avformat");
@@ -28,6 +28,7 @@ pub fn build(b: *std.build.Builder) void {
     },
     else => @panic("Unsupported OS")
   }
+  exe.linkLibC();
   exe.install();
 
   const run_cmd = exe.run();
