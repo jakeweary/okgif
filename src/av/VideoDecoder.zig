@@ -4,6 +4,8 @@ const av = @import("av.zig");
 const util = @import("../util.zig");
 const Self = @This();
 
+state: enum { reading, decoding, finished } = .reading,
+
 video_stream: *c.AVStream,
 format_context: *c.AVFormatContext,
 codec_context: *c.AVCodecContext,
@@ -55,12 +57,33 @@ pub fn deinit(self: *Self) void {
   c.avformat_close_input(&util.optional(self.format_context));
 }
 
-pub fn sendPacket(self: *Self) !void {
-  const code = c.avcodec_send_packet(self.codec_context, self.packet);
-  try av.checkError(code);
+pub fn nextFrame(self: *Self) !?*c.AVFrame {
+  while (true) {
+    switch (self.state) {
+      .reading => {
+        c.av_packet_unref(self.packet);
+        if (!try self.readPacket()) {
+          self.state = .finished;
+        }
+        else if (self.packet.stream_index == self.video_stream.index) {
+          try self.sendPacket();
+          self.state = .decoding;
+        }
+      },
+      .decoding => {
+        if (try self.receiveFrame()) |frame| {
+          return frame;
+        }
+        self.state = .reading;
+      },
+      .finished => {
+        return null;
+      }
+    }
+  }
 }
 
-pub fn receiveFrame(self: *Self) !?*c.AVFrame {
+fn receiveFrame(self: *Self) !?*c.AVFrame {
   switch (c.avcodec_receive_frame(self.codec_context, self.frame)) {
     c.AVERROR_EOF, c.AVERROR(c.EAGAIN) => return null,
     else => |code| {
@@ -70,7 +93,7 @@ pub fn receiveFrame(self: *Self) !?*c.AVFrame {
   }
 }
 
-pub fn readFrame(self: *Self) !bool {
+fn readPacket(self: *Self) !bool {
   switch (c.av_read_frame(self.format_context, self.packet)) {
     c.AVERROR_EOF => return false,
     else => |code| {
@@ -78,4 +101,9 @@ pub fn readFrame(self: *Self) !bool {
       return true;
     }
   }
+}
+
+fn sendPacket(self: *Self) !void {
+  const code = c.avcodec_send_packet(self.codec_context, self.packet);
+  try av.checkError(code);
 }
