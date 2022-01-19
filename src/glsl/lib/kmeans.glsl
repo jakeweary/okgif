@@ -1,4 +1,4 @@
-#define K 64
+#define K 256
 
 uniform vec4 uMeans[K];
 

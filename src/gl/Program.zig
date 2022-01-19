@@ -42,11 +42,12 @@ pub fn bind(self: *const Self, name: [:0]const u8, value: anytype) void {
     .Pointer => |ptr| {
       const T = switch (ptr.size) {
         .Slice => ptr.child,
-        .One => @typeInfo(ptr.child).Array.child,
+        .One => std.meta.Child(ptr.child),
         else => @compileError("unimplemented")
       };
       const vec = switch (@typeInfo(T)) {
         .Array => |info| info,
+        .Vector => |info| info,
         else => @typeInfo([1]T).Array
       };
       const kind = switch (vec.child) {

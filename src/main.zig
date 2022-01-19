@@ -8,13 +8,6 @@ const stb = @import("stb/stb.zig");
 pub const log_level = .debug;
 pub const allocator = std.heap.c_allocator;
 
-fn scaleToArea(area: f64, width: c_int, height: c_int) struct { width: c_int, height: c_int } {
-  const w = @intToFloat(f64, width);
-  const h = @intToFloat(f64, height);
-  const s = @sqrt(area / w / h);
-  return .{ .width = @floatToInt(c_int, s * w), .height = @floatToInt(c_int, s * h) };
-}
-
 pub fn main() !void {
   if (std.os.argv.len < 2) {
     std.debug.print("Usage: {s} <file>\n", .{ std.os.argv[0] });
@@ -28,7 +21,7 @@ pub fn main() !void {
   defer decoder.deinit();
 
   const cc = decoder.codec_context;
-  const scaled = scaleToArea(960 * 540, cc.width, cc.height);
+  const scaled = util.scaleToArea(360_000, cc.width, cc.height);
 
   var resizer = try av.FrameResizer.init(cc, scaled.width, scaled.height);
   defer resizer.deinit();
@@ -102,7 +95,7 @@ pub fn main() !void {
 
   // ---
 
-  const K = 64;
+  const K = 256;
   var means = std.mem.zeroes([K][4]c.GLfloat);
 
   var vao: c.GLuint = undefined;
@@ -159,13 +152,40 @@ pub fn main() !void {
 
   // ---
 
+  defer c.glUseProgram(0);
+  defer c.glBindVertexArray(0);
+  c.glBindVertexArray(vao);
+
+  // ---
+
+  // {
+  //   var texture: c.GLuint = undefined;
+  //   c.glGenTextures(1, &texture);
+  //   defer c.glDeleteTextures(1, &texture);
+
+  //   defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+  //   c.glBindTexture(c.GL_TEXTURE_2D, texture);
+  //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+  //     c.GL_SRGB8, K, 1, 0,
+  //     c.GL_RGB, c.GL_UNSIGNED_BYTE, &util.palette(K));
+  //   gl.textureFilterNearest();
+
+  //   c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+  //   c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
+
+  //   p_convert_to_ucs.use();
+  //   p_convert_to_ucs.bindTexture("tFrame", 0, texture);
+
+  //   c.glViewport(0, 0, K, 1);
+  //   c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+  //   c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
+  // }
+
+  // ---
+
   while (try decoder.nextFrame()) |frame| {
     if (c.glfwWindowShouldClose(window) == c.GLFW_TRUE)
       return;
-
-    defer c.glUseProgram(0);
-    defer c.glBindVertexArray(0);
-    c.glBindVertexArray(vao);
 
     // // step 1: resize and convert to sRGB (on CPU)
     // {
@@ -253,8 +273,13 @@ pub fn main() !void {
 
       c.glViewport(0, 0, K, 1);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
-
       c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
+
+      const T = std.meta.Child(@TypeOf(means));
+      const sortFn = struct {
+        fn asc(_: void, a: T, b: T) bool { return a[0] < b[0]; }
+      };
+      std.sort.sort(T, &means, {}, sortFn.asc);
     }
 
     // step 5: render gif preview
