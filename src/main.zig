@@ -21,7 +21,7 @@ pub fn main() !void {
   defer decoder.deinit();
 
   const cc = decoder.codec_context;
-  const scaled = util.scaleToArea(360_000, cc.width, cc.height);
+  const scaled = util.scaleToArea(332640, cc.width, cc.height);
 
   var resizer = try av.FrameResizer.init(cc, scaled.width, scaled.height);
   defer resizer.deinit();
@@ -86,12 +86,19 @@ pub fn main() !void {
   };
   defer p_means_reseed.deinit();
 
-  const p_render = try blk: {
-    const vs = @embedFile("glsl/pass/render/vertex.glsl");
-    const fs = @embedFile("glsl/pass/render/fragment.glsl");
-    break :blk gl.Program.init(vs, kmeans ++ srgb ++ oklab ++ ucs ++ fs);
+  const p_quantize = try blk: {
+    const vs = @embedFile("glsl/pass/quantize/vertex.glsl");
+    const fs = @embedFile("glsl/pass/quantize/fragment.glsl");
+    break :blk gl.Program.init(vs, kmeans ++ fs);
   };
-  defer p_render.deinit();
+  defer p_quantize.deinit();
+
+  const p_preview = try blk: {
+    const vs = @embedFile("glsl/pass/preview/vertex.glsl");
+    const fs = @embedFile("glsl/pass/preview/fragment.glsl");
+    break :blk gl.Program.init(vs, srgb ++ oklab ++ ucs ++ fs);
+  };
+  defer p_preview.deinit();
 
   // ---
 
@@ -106,7 +113,7 @@ pub fn main() !void {
   c.glGenFramebuffers(1, &fbo);
   defer c.glDeleteFramebuffers(1, &fbo);
 
-  var textures: [8]c.GLuint = undefined;
+  var textures: [9]c.GLuint = undefined;
   c.glGenTextures(textures.len, &textures);
   defer c.glDeleteTextures(textures.len, &textures);
 
@@ -114,7 +121,8 @@ pub fn main() !void {
   const t_ycbcr = textures[2..5];
   const t_rgb = textures[5];
   const t_ucs = textures[6];
-  const t_noise = textures[7];
+  const t_gif = textures[7];
+  const t_noise = textures[8];
 
   {
     const png = @embedFile("../deps/bluenoise_64x64/LDR_RGB1_0.png");
@@ -141,8 +149,13 @@ pub fn main() !void {
 
     c.glBindTexture(c.GL_TEXTURE_2D, t_ucs);
     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-      c.GL_RGB32F, resizer.frame.width, resizer.frame.height, 0,
+      c.GL_RGB32F, scaled.width, scaled.height, 0,
       c.GL_RGB, c.GL_FLOAT, null);
+
+    c.glBindTexture(c.GL_TEXTURE_2D, t_gif);
+    c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+      c.GL_R8UI, scaled.width, scaled.height, 0,
+      c.GL_RED_INTEGER, c.GL_UNSIGNED_BYTE, null);
 
     c.glBindTexture(c.GL_TEXTURE_2D, t_noise);
     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
@@ -152,40 +165,43 @@ pub fn main() !void {
 
   // ---
 
-  defer c.glUseProgram(0);
-  defer c.glBindVertexArray(0);
+  c.glDisable(c.GL_DITHER);
   c.glBindVertexArray(vao);
 
   // ---
 
-  // {
-  //   var texture: c.GLuint = undefined;
-  //   c.glGenTextures(1, &texture);
-  //   defer c.glDeleteTextures(1, &texture);
+  {
+    var texture: c.GLuint = undefined;
+    c.glGenTextures(1, &texture);
+    defer c.glDeleteTextures(1, &texture);
 
-  //   defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-  //   c.glBindTexture(c.GL_TEXTURE_2D, texture);
-  //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-  //     c.GL_SRGB8, K, 1, 0,
-  //     c.GL_RGB, c.GL_UNSIGNED_BYTE, &util.rgb685());
-  //   gl.textureFilterNearest();
+    defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+    c.glBindTexture(c.GL_TEXTURE_2D, texture);
+    c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+      c.GL_SRGB8, K, 1, 0,
+      c.GL_RGB, c.GL_UNSIGNED_BYTE, &util.rgb685());
+    gl.textureFilterNearest();
 
-  //   c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-  //   c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
+    c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+    c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
 
-  //   p_convert_to_ucs.use();
-  //   p_convert_to_ucs.bindTexture("tFrame", 0, texture);
+    p_convert_to_ucs.use();
+    p_convert_to_ucs.bindTexture("tFrame", 0, texture);
 
-  //   c.glViewport(0, 0, K, 1);
-  //   c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
-  //   c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
-  // }
+    c.glViewport(0, 0, K, 1);
+    c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+    c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
+  }
 
   // ---
 
   while (try decoder.nextFrame()) |frame| {
     if (c.glfwWindowShouldClose(window) == c.GLFW_TRUE)
       return;
+
+    defer c.glfwPollEvents();
+    defer c.glfwSwapBuffers(window);
+    defer c.glUseProgram(0);
 
     // // step 1: resize and convert to sRGB (on CPU)
     // {
@@ -243,63 +259,72 @@ pub fn main() !void {
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
     }
 
-    // step 3: update means
+    // // step 3: update means
+    // {
+    //   c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+    //   c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[0], 0);
+
+    //   defer c.glDisable(c.GL_BLEND);
+    //   c.glEnable(c.GL_BLEND);
+    //   c.glBlendFunc(c.GL_ONE, c.GL_ONE);
+
+    //   p_means_update.use();
+    //   p_means_update.bind("uMeans", &means);
+    //   p_means_update.bindTexture("tFrame", 0, t_ucs);
+
+    //   c.glViewport(0, 0, K, 1);
+    //   c.glClear(c.GL_COLOR_BUFFER_BIT);
+    //   c.glDrawArrays(c.GL_POINTS, 0, scaled.width * scaled.height);
+    // }
+
+    // // step 4: reseed and read means
+    // {
+    //   c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+    //   c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
+
+    //   p_means_reseed.use();
+    //   p_means_reseed.bind("uTime", c.glfwGetTime());
+    //   p_means_reseed.bindTexture("tFrame", 0, t_ucs);
+    //   p_means_reseed.bindTexture("tMeans", 1, t_means[0]);
+
+    //   c.glViewport(0, 0, K, 1);
+    //   c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+    //   c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
+
+    //   const T = std.meta.Child(@TypeOf(means));
+    //   const sortFn = struct {
+    //     fn asc(_: void, a: T, b: T) bool { return a[0] < b[0]; }
+    //   };
+    //   std.sort.sort(T, &means, {}, sortFn.asc);
+    // }
+
+    // step 5: quantize
     {
       c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[0], 0);
+      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_gif, 0);
 
-      defer c.glDisable(c.GL_BLEND);
-      c.glEnable(c.GL_BLEND);
-      c.glBlendFunc(c.GL_ONE, c.GL_ONE);
+      p_quantize.use();
+      p_quantize.bind("uMeans", &means);
+      p_quantize.bindTexture("tFrame", 0, t_ucs);
+      p_quantize.bindTexture("tNoise", 1, t_noise);
 
-      p_means_update.use();
-      p_means_update.bind("uMeans", &means);
-      p_means_update.bindTexture("tFrame", 0, t_ucs);
-
-      c.glViewport(0, 0, K, 1);
-      c.glClear(c.GL_COLOR_BUFFER_BIT);
-      c.glDrawArrays(c.GL_POINTS, 0, scaled.width * scaled.height);
-    }
-
-    // step 4: reseed and read means
-    {
-      c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
-
-      p_means_reseed.use();
-      p_means_reseed.bind("uTime", c.glfwGetTime());
-      p_means_reseed.bindTexture("tFrame", 0, t_ucs);
-      p_means_reseed.bindTexture("tMeans", 1, t_means[0]);
-
-      c.glViewport(0, 0, K, 1);
+      c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
-      c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
-
-      const T = std.meta.Child(@TypeOf(means));
-      const sortFn = struct {
-        fn asc(_: void, a: T, b: T) bool { return a[0] < b[0]; }
-      };
-      std.sort.sort(T, &means, {}, sortFn.asc);
     }
 
-    // step 5: render gif preview
+    // step 6: render gif preview
     {
       c.glBindFramebuffer(c.GL_FRAMEBUFFER, 0);
 
       defer c.glDisable(c.GL_FRAMEBUFFER_SRGB);
       c.glEnable(c.GL_FRAMEBUFFER_SRGB);
 
-      p_render.use();
-      p_render.bind("uMeans", &means);
-      p_render.bindTexture("tFrame", 0, t_ucs);
-      p_render.bindTexture("tMeans", 1, t_means[1]);
-      p_render.bindTexture("tNoise", 2, t_noise);
+      p_preview.use();
+      p_preview.bindTexture("tFrame", 0, t_gif);
+      p_preview.bindTexture("tMeans", 1, t_means[1]);
 
       c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
     }
-
-    c.glfwSwapBuffers(window);
-    c.glfwPollEvents();
   }
 }
