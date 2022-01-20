@@ -20,15 +20,19 @@ pub fn scaleToArea(area: f64, width: c_int, height: c_int) struct { width: c_int
   return .{ .width = @floatToInt(c_int, s * w), .height = @floatToInt(c_int, s * h) };
 }
 
-pub fn palette(comptime n: usize) [n][3]u8 {
-  var colors: [n][3]u8 = undefined;
-  for (colors) |*rgb, i| {
-    const pos = .{ .x = i % 16, .y = i / 16 };
-    rgb.* = .{
-      @truncate(u8, (pos.x % 8) * 255 / 7),
-      @truncate(u8, (pos.y % 4) * 255 / 3),
-      @truncate(u8, (pos.x / 8 + pos.y / 4 * 2) * 255 / 7),
+pub fn rgb685() [0x100][3]u8 {
+  var colors: [0x100][3]u8 = undefined;
+  for (colors[0..0x10]) |*rgb, i| {
+    const vec = @splat(3, (i + 1) * 0xff / 17);
+    rgb.* = @truncate(u8, vec);
+  }
+  for (colors[0x10..]) |*rgb, i| {
+    const vec: @Vector(3, usize) = .{
+      i % 6 * 0xff / 5,
+      i / 6 % 8 * 0xff / 7,
+      i / 6 / 8 * 0xff / 4,
     };
+    rgb.* = @truncate(u8, vec);
   }
   return colors;
 }

@@ -167,7 +167,7 @@ pub fn main() !void {
   //   c.glBindTexture(c.GL_TEXTURE_2D, texture);
   //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
   //     c.GL_SRGB8, K, 1, 0,
-  //     c.GL_RGB, c.GL_UNSIGNED_BYTE, &util.palette(K));
+  //     c.GL_RGB, c.GL_UNSIGNED_BYTE, &util.rgb685());
   //   gl.textureFilterNearest();
 
   //   c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
