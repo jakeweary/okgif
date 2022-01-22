@@ -21,7 +21,12 @@ pub fn main() !void {
   defer decoder.deinit();
 
   const cc = decoder.codec_context;
-  const scaled = util.scaleToArea(332640, cc.width, cc.height);
+  // const scaled = util.scaleToArea(332640, cc.width, cc.height);
+  const scaled = .{ .width = 400, .height = 225 };
+  // const scaled = .{ .width = 300, .height = 300 };
+
+  var encoder = try av.GifEncoder.init("test.gif", scaled.width, scaled.height);
+  defer encoder.deinit();
 
   var resizer = try av.FrameResizer.init(cc, scaled.width, scaled.height);
   defer resizer.deinit();
@@ -45,13 +50,14 @@ pub fn main() !void {
   _ = c.glfwSetWindowSizeCallback(window, gl.callbacks.onWindowSize);
   _ = c.glfwSetKeyCallback(window, gl.callbacks.onKey);
   c.glfwMakeContextCurrent(window);
-  c.glfwSwapInterval(1);
+  c.glfwSwapInterval(0);
   _ = c.gladLoadGL(c.glfwGetProcAddress);
 
   gl.debug.enableDebugMessages();
 
   // ---
 
+  // const cam16 = @embedFile("glsl/lib/CAM16.glsl");
   const hashes = @embedFile("glsl/lib/hashes.glsl");
   const kmeans = @embedFile("glsl/lib/kmeans.glsl");
   const oklab = @embedFile("glsl/lib/Oklab.glsl");
@@ -125,7 +131,7 @@ pub fn main() !void {
   const t_noise = textures[8];
 
   {
-    const png = @embedFile("../deps/bluenoise_64x64/LDR_RGB1_0.png");
+    const png = @embedFile("../deps/bluenoise/128/LDR_RGB1_0.png");
     const noise = try stb.Image.fromMemory(png);
     defer noise.deinit();
 
@@ -168,9 +174,21 @@ pub fn main() !void {
   c.glDisable(c.GL_DITHER);
   c.glBindVertexArray(vao);
 
+  // const lvl = c.av_log_get_level();
+  // defer c.av_log_set_level(lvl);
+  // c.av_log_set_level(c.AV_LOG_TRACE);
+
   // ---
 
   {
+    const pal = util.rgb685();
+    // for (pal) |rgb, i| {
+    //   encoder.frame.data[1][i * 4 + 0] = rgb[2];
+    //   encoder.frame.data[1][i * 4 + 1] = rgb[1];
+    //   encoder.frame.data[1][i * 4 + 2] = rgb[0];
+    //   encoder.frame.data[1][i * 4 + 3] = 0xff;
+    // }
+
     var texture: c.GLuint = undefined;
     c.glGenTextures(1, &texture);
     defer c.glDeleteTextures(1, &texture);
@@ -179,7 +197,7 @@ pub fn main() !void {
     c.glBindTexture(c.GL_TEXTURE_2D, texture);
     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
       c.GL_SRGB8, K, 1, 0,
-      c.GL_RGB, c.GL_UNSIGNED_BYTE, &util.rgb685());
+      c.GL_RGB, c.GL_UNSIGNED_BYTE, &pal);
     gl.textureFilterNearest();
 
     c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
@@ -195,7 +213,8 @@ pub fn main() !void {
 
   // ---
 
-  while (try decoder.nextFrame()) |frame| {
+  var frame_pts: c_int = 0;
+  while (try decoder.nextFrame()) |frame| : (frame_pts += 1) {
     if (c.glfwWindowShouldClose(window) == c.GLFW_TRUE)
       return;
 
@@ -209,7 +228,6 @@ pub fn main() !void {
 
     //   defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
     //   defer c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, 0);
-
     //   c.glBindTexture(c.GL_TEXTURE_2D, t_rgb);
     //   c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, @divExact(resized.linesize[0], 3));
     //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
@@ -310,6 +328,23 @@ pub fn main() !void {
 
       c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+
+      var gif_frame = try encoder.allocFrame();
+      defer c.av_frame_free(&util.optional(gif_frame));
+
+      const pal = util.rgb685();
+      for (pal) |rgb, i| {
+        gif_frame.data[1][i * 4 + 0] = rgb[2];
+        gif_frame.data[1][i * 4 + 1] = rgb[1];
+        gif_frame.data[1][i * 4 + 2] = rgb[0];
+        gif_frame.data[1][i * 4 + 3] = 0xff;
+      }
+
+      c.glReadPixels(0, 0, scaled.width, scaled.height,
+        c.GL_RED_INTEGER, c.GL_UNSIGNED_BYTE, gif_frame.data[0]);
+      gif_frame.pts = frame_pts;
+
+      try encoder.encodeFrame(gif_frame);
     }
 
     // step 6: render gif preview
@@ -327,4 +362,7 @@ pub fn main() !void {
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
     }
   }
+
+  try encoder.encodeFrame(null); // flush
+  try encoder.finish();
 }

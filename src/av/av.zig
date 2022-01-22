@@ -3,6 +3,7 @@ const std = @import("std");
 
 pub const FrameResizer = @import("FrameResizer.zig");
 pub const VideoDecoder = @import("VideoDecoder.zig");
+pub const GifEncoder = @import("GifEncoder.zig");
 pub const log = std.log.scoped(.av);
 
 pub fn checkNull(arg: anytype) !void {

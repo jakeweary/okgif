@@ -41,13 +41,13 @@ pub fn init(file: [*:0]const u8) !Self {
   try av.checkError(c.avcodec_parameters_to_context(codec_ctx, codec_params));
   try av.checkError(c.avcodec_open2(codec_ctx, codec, null));
 
-  var frame = c.av_frame_alloc();
-  try av.checkNull(frame);
-  errdefer c.av_frame_free(&frame);
-
   var packet = c.av_packet_alloc();
   try av.checkNull(packet);
   errdefer c.av_packet_free(&packet);
+
+  var frame = c.av_frame_alloc();
+  try av.checkNull(frame);
+  errdefer c.av_frame_free(&frame);
 
   return Self{
     .video_stream = stream,

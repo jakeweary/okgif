@@ -7,3 +7,5 @@
 - https://github.com/glfw/glfw/blob/master/examples/triangle-opengl.c
 - https://github.com/leandromoreira/ffmpeg-libav-tutorial
 - https://ffmpeg.org/doxygen/4.1/api-h264-test_8c_source.html
+- https://ffmpeg.org/doxygen/4.1/transcoding_8c-example.html
+- https://ffmpeg.org/doxygen/4.1/libavformat_2gif_8c_source.html
