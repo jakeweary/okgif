@@ -23,24 +23,24 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
   const stream = c.avformat_new_stream(fmt_ctx, codec);
   try av.checkNull(stream);
 
-  const codec_params = stream.*.codecpar;
-  codec_params.*.codec_tag = 0;
-  codec_params.*.codec_id = codec.*.id;
-  codec_params.*.codec_type = c.AVMEDIA_TYPE_VIDEO;
-  codec_params.*.format = c.AV_PIX_FMT_PAL8;
-  codec_params.*.width = width;
-  codec_params.*.height = height;
+  const params = stream.*.codecpar;
+  params.*.codec_tag = 0;
+  params.*.codec_id = codec.*.id;
+  params.*.codec_type = c.AVMEDIA_TYPE_VIDEO;
+  params.*.format = c.AV_PIX_FMT_PAL8;
+  params.*.width = width;
+  params.*.height = height;
 
   var codec_ctx = c.avcodec_alloc_context3(codec);
   try av.checkNull(codec_ctx);
   errdefer c.avcodec_free_context(&codec_ctx);
 
-  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, codec_params));
-  codec_ctx.*.time_base = c.av_make_q(1, 20);
+  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, params));
+  codec_ctx.*.time_base = c.av_make_q(1, 24);
 
   try av.checkError(c.avcodec_open2(codec_ctx, codec, null));
   try av.checkError(c.avio_open(&fmt_ctx.*.pb, file, c.AVIO_FLAG_WRITE));
-  errdefer av.checkError(c.avio_closep(&fmt_ctx.*.pb)) catch unreachable;
+  errdefer _ = c.avio_closep(&fmt_ctx.*.pb);
   try av.checkError(c.avformat_write_header(fmt_ctx, null));
 
   var packet = c.av_packet_alloc();
@@ -66,7 +66,7 @@ pub fn finish(self: *Self) !void {
   try av.checkError(c.avio_closep(&self.format_context.pb));
 }
 
-pub fn allocFrame(self: *Self) !*c.AVFrame {
+pub fn allocFrame(self: *Self, palette: *const [0x100][4]u8) !*c.AVFrame {
   var frame = c.av_frame_alloc();
   try av.checkNull(frame);
   errdefer c.av_frame_free(&frame);
@@ -75,6 +75,8 @@ pub fn allocFrame(self: *Self) !*c.AVFrame {
   frame.*.width = self.codec_context.width;
   frame.*.height = self.codec_context.height;
   try av.checkError(c.av_frame_get_buffer(frame, 4));
+
+  @memcpy(frame.*.data[1], @ptrCast([*]const u8, palette), 0x400);
 
   return frame;
 }

@@ -5,7 +5,7 @@ const Self = @This();
 
 id: c.GLuint,
 
-pub fn init(vert: []const c.GLchar, frag: []const c.GLchar) !Self {
+pub fn init(vert: []const []const c.GLchar, frag: []const []const c.GLchar) !Self {
   const pb = gl.ProgramBuilder.init();
   try pb.attach(c.GL_VERTEX_SHADER, vert);
   try pb.attach(c.GL_FRAGMENT_SHADER, frag);

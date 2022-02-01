@@ -8,6 +8,9 @@ pub const Program = @import("Program.zig");
 pub const ProgramBuilder = @import("ProgramBuilder.zig");
 pub const log = std.log.scoped(.gl);
 
+pub const major = 4;
+pub const minor = 6;
+
 // ---
 
 fn ReturnTypeOf(comptime method: @Type(.EnumLiteral)) type {
@@ -36,19 +39,4 @@ pub fn textureFilterNearest() void {
 pub fn textureFilterLinear() void {
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MIN_FILTER, c.GL_LINEAR);
   c.glTexParameteri(c.GL_TEXTURE_2D, c.GL_TEXTURE_MAG_FILTER, c.GL_LINEAR);
-}
-
-// ---
-
-pub fn joinShaderSources(allocator: std.mem.Allocator, sources: []const []const u8) ![]const u8 {
-  var joined = std.ArrayList(u8).init(allocator);
-  defer joined.deinit();
-
-  try joined.appendSlice("#version 460\n");
-  for (sources) |source| {
-    try joined.append('\n');
-    try joined.appendSlice(source);
-  }
-
-  return joined.toOwnedSlice();
 }

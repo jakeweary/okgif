@@ -17,28 +17,27 @@ pub fn init(file: [*:0]const u8) !Self {
   try av.checkError(c.avformat_open_input(&fmt_ctx, file, null, null));
   errdefer c.avformat_close_input(&fmt_ctx);
 
+  c.av_log(null, c.AV_LOG_INFO, "Looking for stream info...\n");
   try av.checkError(c.avformat_find_stream_info(fmt_ctx, null));
+
+  c.av_log(null, c.AV_LOG_INFO, "Looking for a video stream...\n");
   const stream_index = c.av_find_best_stream(fmt_ctx, c.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
   try av.checkError(stream_index);
 
   const stream = fmt_ctx.*.streams[@intCast(usize, stream_index)];
-  const codec_params = stream.*.codecpar;
+  const params = stream.*.codecpar;
+  c.av_log(null, c.AV_LOG_INFO, "Found a video stream: %s %dx%d\n",
+    c.av_get_pix_fmt_name(params.*.format), params.*.width, params.*.height);
 
-  const pix_fmt = c.av_get_pix_fmt_name(codec_params.*.format);
-  const width = codec_params.*.width;
-  const height = codec_params.*.height;
-  av.log.debug("Stream: {s} {}x{}", .{ pix_fmt, width, height });
-
-  const codec = c.avcodec_find_decoder(codec_params.*.codec_id);
+  const codec = c.avcodec_find_decoder(params.*.codec_id);
   try av.checkNull(codec);
-
-  av.log.debug("Codec: {s}", .{ codec.*.name });
+  c.av_log(null, c.AV_LOG_INFO, "Found a video decoder: %s\n", codec.*.name);
 
   var codec_ctx = c.avcodec_alloc_context3(codec);
   try av.checkNull(codec_ctx);
   errdefer c.avcodec_free_context(&codec_ctx);
 
-  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, codec_params));
+  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, params));
   try av.checkError(c.avcodec_open2(codec_ctx, codec, null));
 
   var packet = c.av_packet_alloc();

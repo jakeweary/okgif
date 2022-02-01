@@ -5,10 +5,12 @@ const av = @import("av/av.zig");
 const gl = @import("gl/gl.zig");
 const stb = @import("stb/stb.zig");
 
-pub const log_level = .debug;
+pub const log_level = std.log.Level.info;
 pub const allocator = std.heap.c_allocator;
 
 pub fn main() !void {
+  av.setLogLevel(log_level);
+
   if (std.os.argv.len < 2) {
     std.debug.print("Usage: {s} <file>\n", .{ std.os.argv[0] });
     std.os.exit(1);
@@ -21,9 +23,10 @@ pub fn main() !void {
   defer decoder.deinit();
 
   const cc = decoder.codec_context;
+  const scaled = util.scaleToArea(166320, cc.width, cc.height);
   // const scaled = util.scaleToArea(332640, cc.width, cc.height);
-  const scaled = .{ .width = 400, .height = 225 };
-  // const scaled = .{ .width = 300, .height = 300 };
+  // const scaled = util.scaleToArea(720720, cc.width, cc.height);
+  // const scaled = .{ .width = 400, .height = 225 };
 
   var encoder = try av.GifEncoder.init("test.gif", scaled.width, scaled.height);
   defer encoder.deinit();
@@ -39,8 +42,8 @@ pub fn main() !void {
     return error.GLFW_InitError;
   defer c.glfwTerminate();
 
-  c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
-  c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 6);
+  c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, gl.major);
+  c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, gl.minor);
   c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
   c.glfwWindowHint(c.GLFW_OPENGL_DEBUG_CONTEXT, c.GLFW_TRUE);
   const window = c.glfwCreateWindow(scaled.width, scaled.height, filename.ptr, null, null)
@@ -57,52 +60,51 @@ pub fn main() !void {
 
   // ---
 
-  // const cam16 = @embedFile("glsl/lib/CAM16.glsl");
   const hashes = @embedFile("glsl/lib/hashes.glsl");
   const kmeans = @embedFile("glsl/lib/kmeans.glsl");
   const oklab = @embedFile("glsl/lib/Oklab.glsl");
   const srgb = @embedFile("glsl/lib/sRGB.glsl");
   const ucs = @embedFile("glsl/lib/UCS.glsl");
 
-  const p_convert_to_rgb = try blk: {
-    const vs = @embedFile("glsl/pass/convert_to_rgb/vertex.glsl");
-    const fs = @embedFile("glsl/pass/convert_to_rgb/fragment.glsl");
-    break :blk gl.Program.init(vs, srgb ++ fs);
+  const p_convert_rgb = try blk: {
+    const vs = @embedFile("glsl/pass/convert_YCbCr_sRGB/vertex.glsl");
+    const fs = @embedFile("glsl/pass/convert_YCbCr_sRGB/fragment.glsl");
+    break :blk gl.Program.init(&.{ vs }, &.{ srgb, fs });
   };
-  defer p_convert_to_rgb.deinit();
+  defer p_convert_rgb.deinit();
 
-  const p_convert_to_ucs = try blk: {
-    const vs = @embedFile("glsl/pass/convert_to_ucs/vertex.glsl");
-    const fs = @embedFile("glsl/pass/convert_to_ucs/fragment.glsl");
-    break :blk gl.Program.init(vs, srgb ++ oklab ++ ucs ++ fs);
+  const p_convert_ucs = try blk: {
+    const vs = @embedFile("glsl/pass/convert_sRGB_UCS/vertex.glsl");
+    const fs = @embedFile("glsl/pass/convert_sRGB_UCS/fragment.glsl");
+    break :blk gl.Program.init(&.{ vs }, &.{ srgb, oklab, ucs, fs });
   };
-  defer p_convert_to_ucs.deinit();
+  defer p_convert_ucs.deinit();
 
   const p_means_update = try blk: {
     const vs = @embedFile("glsl/pass/means_update/vertex.glsl");
     const fs = @embedFile("glsl/pass/means_update/fragment.glsl");
-    break :blk gl.Program.init(kmeans ++ vs, fs);
+    break :blk gl.Program.init(&.{ kmeans, vs }, &.{ fs });
   };
   defer p_means_update.deinit();
 
   const p_means_reseed = try blk: {
     const vs = @embedFile("glsl/pass/means_reseed/vertex.glsl");
     const fs = @embedFile("glsl/pass/means_reseed/fragment.glsl");
-    break :blk gl.Program.init(vs, hashes ++ fs);
+    break :blk gl.Program.init(&.{ vs }, &.{ hashes, fs });
   };
   defer p_means_reseed.deinit();
 
   const p_quantize = try blk: {
     const vs = @embedFile("glsl/pass/quantize/vertex.glsl");
     const fs = @embedFile("glsl/pass/quantize/fragment.glsl");
-    break :blk gl.Program.init(vs, kmeans ++ fs);
+    break :blk gl.Program.init(&.{ vs }, &.{ kmeans, fs });
   };
   defer p_quantize.deinit();
 
   const p_preview = try blk: {
     const vs = @embedFile("glsl/pass/preview/vertex.glsl");
     const fs = @embedFile("glsl/pass/preview/fragment.glsl");
-    break :blk gl.Program.init(vs, srgb ++ oklab ++ ucs ++ fs);
+    break :blk gl.Program.init(&.{ vs }, &.{ srgb, oklab, ucs, fs });
   };
   defer p_preview.deinit();
 
@@ -180,15 +182,9 @@ pub fn main() !void {
 
   // ---
 
-  {
-    const pal = util.rgb685();
-    // for (pal) |rgb, i| {
-    //   encoder.frame.data[1][i * 4 + 0] = rgb[2];
-    //   encoder.frame.data[1][i * 4 + 1] = rgb[1];
-    //   encoder.frame.data[1][i * 4 + 2] = rgb[0];
-    //   encoder.frame.data[1][i * 4 + 3] = 0xff;
-    // }
+  const palette = util.rgb685();
 
+  {
     var texture: c.GLuint = undefined;
     c.glGenTextures(1, &texture);
     defer c.glDeleteTextures(1, &texture);
@@ -197,14 +193,14 @@ pub fn main() !void {
     c.glBindTexture(c.GL_TEXTURE_2D, texture);
     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
       c.GL_SRGB8, K, 1, 0,
-      c.GL_RGB, c.GL_UNSIGNED_BYTE, &pal);
+      c.GL_BGRA, c.GL_UNSIGNED_BYTE, &palette);
     gl.textureFilterNearest();
 
     c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
     c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_means[1], 0);
 
-    p_convert_to_ucs.use();
-    p_convert_to_ucs.bindTexture("tFrame", 0, texture);
+    p_convert_ucs.use();
+    p_convert_ucs.bindTexture("tFrame", 0, texture);
 
     c.glViewport(0, 0, K, 1);
     c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
@@ -222,56 +218,56 @@ pub fn main() !void {
     defer c.glfwSwapBuffers(window);
     defer c.glUseProgram(0);
 
-    // // step 1: resize and convert to sRGB (on CPU)
-    // {
-    //   const resized = try resizer.resize(frame);
-
-    //   defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
-    //   defer c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, 0);
-    //   c.glBindTexture(c.GL_TEXTURE_2D, t_rgb);
-    //   c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, @divExact(resized.linesize[0], 3));
-    //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-    //     c.GL_SRGB8, resized.width, resized.height, 0,
-    //     c.GL_RGB, c.GL_UNSIGNED_BYTE, resized.data[0]);
-    // }
-
-    // step 1: resize and convert to sRGB (on GPU)
+    // step 1: resize and convert to sRGB (on CPU)
     {
-      c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
-      c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_rgb, 0);
+      const resized = try resizer.resize(frame);
 
       defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
       defer c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, 0);
-
       c.glBindTexture(c.GL_TEXTURE_2D, t_rgb);
+      c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, @divExact(resized.linesize[0], 3));
       c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-        c.GL_SRGB8, scaled.width, scaled.height, 0,
-        c.GL_RGB, c.GL_UNSIGNED_BYTE, null);
-
-      for ([_]c_int{ 1, 2, 2 }) |n, i| {
-        c.glBindTexture(c.GL_TEXTURE_2D, t_ycbcr[i]);
-        c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, frame.linesize[i]);
-        c.glTexImage2D(c.GL_TEXTURE_2D, 0,
-          c.GL_R8, @divTrunc(frame.width, n), @divTrunc(frame.height, n), 0,
-          c.GL_RED, c.GL_UNSIGNED_BYTE, frame.data[i]);
-      }
-
-      p_convert_to_rgb.use();
-      p_convert_to_rgb.bindTexture("tY", 0, t_ycbcr[0]);
-      p_convert_to_rgb.bindTexture("tCb", 1, t_ycbcr[1]);
-      p_convert_to_rgb.bindTexture("tCr", 2, t_ycbcr[2]);
-
-      c.glViewport(0, 0, scaled.width, scaled.height);
-      c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+        c.GL_SRGB8, resized.width, resized.height, 0,
+        c.GL_RGB, c.GL_UNSIGNED_BYTE, resized.data[0]);
     }
+
+    // // step 1: resize and convert to sRGB (on GPU)
+    // {
+    //   c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
+    //   c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_rgb, 0);
+
+    //   defer c.glBindTexture(c.GL_TEXTURE_2D, 0);
+    //   defer c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, 0);
+
+    //   c.glBindTexture(c.GL_TEXTURE_2D, t_rgb);
+    //   c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+    //     c.GL_SRGB8, scaled.width, scaled.height, 0,
+    //     c.GL_RGB, c.GL_UNSIGNED_BYTE, null);
+
+    //   for ([_]c_int{ 1, 2, 2 }) |n, i| {
+    //     c.glBindTexture(c.GL_TEXTURE_2D, t_ycbcr[i]);
+    //     c.glPixelStorei(c.GL_UNPACK_ROW_LENGTH, frame.linesize[i]);
+    //     c.glTexImage2D(c.GL_TEXTURE_2D, 0,
+    //       c.GL_R8, @divTrunc(frame.width, n), @divTrunc(frame.height, n), 0,
+    //       c.GL_RED, c.GL_UNSIGNED_BYTE, frame.data[i]);
+    //   }
+
+    //   p_convert_rgb.use();
+    //   p_convert_rgb.bindTexture("tY", 0, t_ycbcr[0]);
+    //   p_convert_rgb.bindTexture("tCb", 1, t_ycbcr[1]);
+    //   p_convert_rgb.bindTexture("tCr", 2, t_ycbcr[2]);
+
+    //   c.glViewport(0, 0, scaled.width, scaled.height);
+    //   c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
+    // }
 
     // step 2: convert to UCS
     {
       c.glBindFramebuffer(c.GL_FRAMEBUFFER, fbo);
       c.glNamedFramebufferTexture(fbo, c.GL_COLOR_ATTACHMENT0, t_ucs, 0);
 
-      p_convert_to_ucs.use();
-      p_convert_to_ucs.bindTexture("tFrame", 0, t_rgb);
+      p_convert_ucs.use();
+      p_convert_ucs.bindTexture("tFrame", 0, t_rgb);
 
       c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
@@ -309,11 +305,11 @@ pub fn main() !void {
     //   c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
     //   c.glReadPixels(0, 0, K, 1, c.GL_RGBA, c.GL_FLOAT, &means);
 
-    //   const T = std.meta.Child(@TypeOf(means));
-    //   const sortFn = struct {
-    //     fn asc(_: void, a: T, b: T) bool { return a[0] < b[0]; }
-    //   };
-    //   std.sort.sort(T, &means, {}, sortFn.asc);
+    //   // const T = std.meta.Child(@TypeOf(means));
+    //   // const sortFn = struct {
+    //   //   fn asc(_: void, a: T, b: T) bool { return a[0] < b[0]; }
+    //   // };
+    //   // std.sort.sort(T, &means, {}, sortFn.asc);
     // }
 
     // step 5: quantize
@@ -329,16 +325,8 @@ pub fn main() !void {
       c.glViewport(0, 0, scaled.width, scaled.height);
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
 
-      var gif_frame = try encoder.allocFrame();
+      var gif_frame = try encoder.allocFrame(&palette);
       defer c.av_frame_free(&util.optional(gif_frame));
-
-      const pal = util.rgb685();
-      for (pal) |rgb, i| {
-        gif_frame.data[1][i * 4 + 0] = rgb[2];
-        gif_frame.data[1][i * 4 + 1] = rgb[1];
-        gif_frame.data[1][i * 4 + 2] = rgb[0];
-        gif_frame.data[1][i * 4 + 3] = 0xff;
-      }
 
       c.glReadPixels(0, 0, scaled.width, scaled.height,
         c.GL_RED_INTEGER, c.GL_UNSIGNED_BYTE, gif_frame.data[0]);

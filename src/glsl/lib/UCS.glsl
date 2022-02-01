@@ -1,5 +1,8 @@
 // dependencies: Oklab
 
+// #define sRGB_to_UCS sRGB_to_Lab
+// #define UCS_to_sRGB Lab_to_sRGB
+
 vec3 sRGB_to_UCS(vec3 sRGB) {
   vec3 Lab = sRGB_to_Lab(sRGB);
   return vec3(L_to_Lr(Lab.x), Lab.yz);
@@ -9,6 +12,14 @@ vec3 UCS_to_sRGB(vec3 Lrab) {
   vec3 Lab = vec3(Lr_to_L(Lrab.x), Lrab.yz);
   return Lab_to_sRGB(Lab);
 }
+
+// vec3 sRGB_to_UCS(vec3 sRGB) {
+//   return 255.0 * sRGB_OETF(sRGB);
+// }
+
+// vec3 UCS_to_sRGB(vec3 UCS) {
+//   return sRGB_EOTF(UCS / 255.0);
+// }
 
 // ---
 
