@@ -10,8 +10,11 @@ mv deps/ffmpeg-* deps/ffmpeg
 mkdir -p zig-out/bin
 cp deps/ffmpeg/bin/*.dll zig-out/bin
 
-# build and run
-zig build run -Dtarget=x86_64-windows-gnu -- input.mp4
+# debug mode build and run
+zig build run -- input.mp4
+
+# explicit release build
+zig build -Drelease-fast -Dtarget=x86_64-windows-gnu -Dcpu=baseline
 ```
 
 ## References:
