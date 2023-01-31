@@ -57,12 +57,12 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
 }
 
 pub fn deinit(self: *const Self) void {
-  var packet = util.optional(self.packet);
-  var codec_context = util.optional(self.codec_context);
-  var format_context = util.optional(self.format_context);
+  var packet: ?*c.AVPacket = self.packet;
+  var codec_ctx: ?*c.AVCodecContext = self.codec_context;
+  var format_ctx: ?*c.AVFormatContext = self.format_context;
   c.av_packet_free(&packet);
-  c.avcodec_free_context(&codec_context);
-  c.avformat_close_input(&format_context);
+  c.avcodec_free_context(&codec_ctx);
+  c.avformat_close_input(&format_ctx);
 }
 
 pub fn finish(self: *const Self) !void {

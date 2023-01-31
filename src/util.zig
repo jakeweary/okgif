@@ -1,13 +1,13 @@
 const std = @import("std");
-const Type = std.builtin.Type;
+// const Type = std.builtin.Type;
 
-pub fn Optional(comptime T: type) type {
-  return @Type(Type{ .Optional = .{ .child = T } });
-}
+// pub fn Optional(comptime T: type) type {
+//   return @Type(Type{ .Optional = .{ .child = T } });
+// }
 
-pub fn optional(arg: anytype) Optional(@TypeOf(arg)) {
-  return arg;
-}
+// pub fn optional(arg: anytype) Optional(@TypeOf(arg)) {
+//   return arg;
+// }
 
 pub fn range(len: usize) []const void {
   return @as([*]void, undefined)[0..len];

@@ -31,7 +31,7 @@ pub fn init(cc: *c.AVCodecContext, width: c_int, height: c_int) !Self {
 }
 
 pub fn deinit(self: *const Self) void {
-  var frame = util.optional(self.frame);
+  var frame: ?*c.AVFrame = self.frame;
   c.sws_freeContext(self.sws_context);
   c.av_frame_free(&frame);
 }
