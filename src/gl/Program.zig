@@ -16,11 +16,11 @@ pub fn deinit(self: *const Self) void {
   c.glDeleteProgram(self.id);
 }
 
-pub fn attribute(self: *const Self, name: [:0]const u8) c.GLuint {
+pub fn attribute(self: *const Self, name: [*:0]const u8) c.GLuint {
   return @intCast(c.GLuint, c.glGetAttribLocation(self.id, name));
 }
 
-pub fn uniform(self: *const Self, name: [:0]const u8) c.GLint {
+pub fn uniform(self: *const Self, name: [*:0]const u8) c.GLint {
   return c.glGetUniformLocation(self.id, name);
 }
 
@@ -28,13 +28,13 @@ pub fn use(self: *const Self) void {
   c.glUseProgram(self.id);
 }
 
-pub fn bindTexture(self: *const Self, name: [:0]const u8, unit: c.GLuint, texture: c.GLuint) void {
+pub fn bindTexture(self: *const Self, name: [*:0]const u8, unit: c.GLuint, texture: c.GLuint) void {
   c.glBindTextureUnit(unit, texture);
   self.bind(name, unit);
 }
 
 // here goes my attempt to cover (almost) all of `glUniform{1|2|3|4}{f|i|ui}[v]`
-pub fn bind(self: *const Self, name: [:0]const u8, value: anytype) void {
+pub fn bind(self: *const Self, name: [*:0]const u8, value: anytype) void {
   const loc = self.uniform(name);
   switch (@typeInfo(@TypeOf(value))) {
     .ComptimeFloat, .Float => c.glUniform1f(loc, @floatCast(c.GLfloat, value)),

@@ -38,22 +38,24 @@ pub fn setLogLevel(level: std.log.Level) void {
   });
 }
 
-// fn logCallback(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, args: c.va_list) callconv(.C) void {
-//   const name: [*:0]const u8 = if (avcl) |ptr| c.av_default_item_name(ptr) else "";
+// TODO finish this thing
+fn logCallback(avcl: ?*anyopaque, level: c_int, fmt: [*c]const u8, args: c.va_list) callconv(.C) void {
+  const name: [*:0]const u8 = if (avcl) |ptr| c.av_default_item_name(ptr) else "";
+  _ = name;
 
-//   var buf: [0x10000]u8 = undefined;
-//   const len = c.vsnprintf(&buf, buf.len, fmt, args);
-//   const str = buf[0..@intCast(usize, len - 1)];
+  var buf: [0x10000]u8 = undefined;
+  const len = c.vsnprintf(&buf, buf.len, fmt, args);
+  const str = buf[0..@intCast(usize, len - 1)];
 
-//   switch (level) {
-//     c.AV_LOG_ERROR,
-//     c.AV_LOG_FATAL,
-//     c.AV_LOG_PANIC => log.err("{s}", .{ str }),
-//     c.AV_LOG_WARNING => log.warn("{s}", .{ str }),
-//     c.AV_LOG_INFO => log.info("{s}", .{ str }),
-//     c.AV_LOG_DEBUG,
-//     c.AV_LOG_TRACE,
-//     c.AV_LOG_VERBOSE => log.debug("{s}", .{ str }),
-//     else => unreachable
-//   }
-// }
+  switch (level) {
+    c.AV_LOG_ERROR,
+    c.AV_LOG_FATAL,
+    c.AV_LOG_PANIC => log.err("{s}", .{ str }),
+    c.AV_LOG_WARNING => log.warn("{s}", .{ str }),
+    c.AV_LOG_INFO => log.info("{s}", .{ str }),
+    c.AV_LOG_DEBUG,
+    c.AV_LOG_TRACE,
+    c.AV_LOG_VERBOSE => log.debug("{s}", .{ str }),
+    else => unreachable
+  }
+}

@@ -10,5 +10,5 @@ void main() {
   vec2 ns = vec2(textureSize(tNoise, 0));
   vec3 noise = texture(tNoise, fs / ns * vUV).xyz - 0.5;
   vec3 color = texture(tFrame, vUV).xyz;
-  fColor = closest(color + noise / 16.0);
+  fColor = kmeans_closest(color + noise / 10.0);
 }

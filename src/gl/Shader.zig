@@ -14,7 +14,7 @@ pub fn init(kind: c.GLenum, sources: []const []const c.GLchar) !Self {
   const self = Self{ .id = c.glCreateShader(kind) };
   errdefer self.deinit();
 
-  gl.log.debug("compiling a shader...", .{});
+  gl.log.debug("compiling shader: {}", .{ self.id });
   c.glShaderSource(self.id, 1, &source.ptr, &@intCast(c.GLint, source.len));
   c.glCompileShader(self.id);
   try self.checkError(source);
@@ -34,7 +34,7 @@ fn checkError(self: *const Self, source: []const c.GLchar) !void {
     var line_n: usize = 1;
     var lines = util.splitLines(source);
     while (lines.next()) |line| : (line_n += 1)
-      gl.log.debug("{:0>4}: {s}\n", .{ line_n, line });
+      gl.log.debug("{:0>4}: {s}", .{ line_n, line });
 
     var info_len: c.GLint = undefined;
     c.glGetShaderiv(self.id, c.GL_INFO_LOG_LENGTH, &info_len);

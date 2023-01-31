@@ -6,14 +6,15 @@ pub fn build(b: *std.build.Builder) void {
     .default_target = .{ .os_tag = .windows }
   });
 
-  const exe = b.addExecutable("gl", "src/main.zig");
+  const exe = b.addExecutable("okgif", "src/main.zig");
   exe.single_threaded = true;
   exe.setTarget(target);
   exe.setBuildMode(mode);
-  exe.addLibPath("deps/lib");
-  exe.addLibPath("deps/ffmpeg/lib");
-  exe.addIncludeDir("deps/include");
-  exe.addIncludeDir("deps/ffmpeg/include");
+  exe.setMainPkgPath("");
+  exe.addLibraryPath("deps/lib");
+  exe.addIncludePath("deps/include");
+  exe.addLibraryPath("deps/ffmpeg/lib");
+  exe.addIncludePath("deps/ffmpeg/include");
   exe.addCSourceFile("deps/impl.c", &.{"-std=c99"});
   exe.linkSystemLibrary("glfw3");
   exe.linkSystemLibrary("avcodec");
@@ -33,7 +34,7 @@ pub fn build(b: *std.build.Builder) void {
 
   const run_cmd = exe.run();
   run_cmd.step.dependOn(b.getInstallStep());
-  run_cmd.addArgs(b.args orelse &.{});
+  run_cmd.addArgs(b.args orelse &[_][]const u8{});
 
   const run_step = b.step("run", "Run the app");
   run_step.dependOn(&run_cmd.step);

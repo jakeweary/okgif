@@ -23,19 +23,20 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
   const stream = c.avformat_new_stream(fmt_ctx, codec);
   try av.checkNull(stream);
 
-  const params = stream.*.codecpar;
-  params.*.codec_tag = 0;
-  params.*.codec_id = codec.*.id;
-  params.*.codec_type = c.AVMEDIA_TYPE_VIDEO;
-  params.*.format = c.AV_PIX_FMT_PAL8;
-  params.*.width = width;
-  params.*.height = height;
+  util.overwrite(stream.*.codecpar, .{
+    .codec_tag = 0,
+    .codec_id = codec.*.id,
+    .codec_type = c.AVMEDIA_TYPE_VIDEO,
+    .format = c.AV_PIX_FMT_PAL8,
+    .width = width,
+    .height = height,
+  });
 
   var codec_ctx = c.avcodec_alloc_context3(codec);
   try av.checkNull(codec_ctx);
   errdefer c.avcodec_free_context(&codec_ctx);
 
-  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, params));
+  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, stream.*.codecpar));
   codec_ctx.*.time_base = c.av_make_q(1, 24);
 
   try av.checkError(c.avcodec_open2(codec_ctx, codec, null));
@@ -55,18 +56,21 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
   };
 }
 
-pub fn deinit(self: *Self) void {
-  c.av_packet_free(&util.optional(self.packet));
-  c.avcodec_free_context(&util.optional(self.codec_context));
-  c.avformat_close_input(&util.optional(self.format_context));
+pub fn deinit(self: *const Self) void {
+  var packet = util.optional(self.packet);
+  var codec_context = util.optional(self.codec_context);
+  var format_context = util.optional(self.format_context);
+  c.av_packet_free(&packet);
+  c.avcodec_free_context(&codec_context);
+  c.avformat_close_input(&format_context);
 }
 
-pub fn finish(self: *Self) !void {
+pub fn finish(self: *const Self) !void {
   try av.checkError(c.av_write_trailer(self.format_context));
   try av.checkError(c.avio_closep(&self.format_context.pb));
 }
 
-pub fn allocFrame(self: *Self, palette: *const [0x100][4]u8) !*c.AVFrame {
+pub fn allocFrame(self: *const Self, palette: *const [0x100][4]u8) !*c.AVFrame {
   var frame = c.av_frame_alloc();
   try av.checkNull(frame);
   errdefer c.av_frame_free(&frame);
@@ -81,7 +85,7 @@ pub fn allocFrame(self: *Self, palette: *const [0x100][4]u8) !*c.AVFrame {
   return frame;
 }
 
-pub fn encodeFrame(self: *Self, frame: ?*c.AVFrame) !void {
+pub fn encodeFrame(self: *const Self, frame: ?*c.AVFrame) !void {
   try av.checkError(c.avcodec_send_frame(self.codec_context, frame));
   while (try self.receivePacket()) |packet| {
     c.av_packet_rescale_ts(packet, self.codec_context.time_base, self.gif_stream.time_base);
@@ -89,7 +93,7 @@ pub fn encodeFrame(self: *Self, frame: ?*c.AVFrame) !void {
   }
 }
 
-fn receivePacket(self: *Self) !?*c.AVPacket {
+fn receivePacket(self: *const Self) !?*c.AVPacket {
   switch (c.avcodec_receive_packet(self.codec_context, self.packet)) {
     c.AVERROR_EOF, c.AVERROR(c.EAGAIN) => return null,
     else => |code| {

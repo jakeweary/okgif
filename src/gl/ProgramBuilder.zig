@@ -22,7 +22,7 @@ pub fn attach(self: *const Self, kind: c.GLenum, sources: []const []const c.GLch
 pub fn link(self: *const Self) !gl.Program {
   errdefer c.glDeleteProgram(self.id);
 
-  gl.log.debug("linking a program...", .{});
+  gl.log.debug("linking program: {}", .{ self.id });
   c.glLinkProgram(self.id);
   try self.checkError();
   try self.logActiveResources();

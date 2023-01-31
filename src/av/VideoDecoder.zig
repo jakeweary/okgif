@@ -17,21 +17,19 @@ pub fn init(file: [*:0]const u8) !Self {
   try av.checkError(c.avformat_open_input(&fmt_ctx, file, null, null));
   errdefer c.avformat_close_input(&fmt_ctx);
 
-  c.av_log(null, c.AV_LOG_INFO, "Looking for stream info...\n");
   try av.checkError(c.avformat_find_stream_info(fmt_ctx, null));
-
-  c.av_log(null, c.AV_LOG_INFO, "Looking for a video stream...\n");
   const stream_index = c.av_find_best_stream(fmt_ctx, c.AVMEDIA_TYPE_VIDEO, -1, -1, null, 0);
   try av.checkError(stream_index);
 
   const stream = fmt_ctx.*.streams[@intCast(usize, stream_index)];
   const params = stream.*.codecpar;
-  c.av_log(null, c.AV_LOG_INFO, "Found a video stream: %s %dx%d\n",
-    c.av_get_pix_fmt_name(params.*.format), params.*.width, params.*.height);
+  av.log.info("Found the stream: {s} {}x{}", .{
+    c.av_get_pix_fmt_name(params.*.format), params.*.width, params.*.height
+  });
 
   const codec = c.avcodec_find_decoder(params.*.codec_id);
   try av.checkNull(codec);
-  c.av_log(null, c.AV_LOG_INFO, "Found a video decoder: %s\n", codec.*.name);
+  av.log.info("Found the decoder: {s}", .{ codec.*.name });
 
   var codec_ctx = c.avcodec_alloc_context3(codec);
   try av.checkNull(codec_ctx);
@@ -57,11 +55,15 @@ pub fn init(file: [*:0]const u8) !Self {
   };
 }
 
-pub fn deinit(self: *Self) void {
-  c.av_frame_free(&util.optional(self.frame));
-  c.av_packet_free(&util.optional(self.packet));
-  c.avcodec_free_context(&util.optional(self.codec_context));
-  c.avformat_close_input(&util.optional(self.format_context));
+pub fn deinit(self: *const Self) void {
+  var frame = util.optional(self.frame);
+  var packet = util.optional(self.packet);
+  var codec_context = util.optional(self.codec_context);
+  var format_context = util.optional(self.format_context);
+  c.av_frame_free(&frame);
+  c.av_packet_free(&packet);
+  c.avcodec_free_context(&codec_context);
+  c.avformat_close_input(&format_context);
 }
 
 pub fn nextFrame(self: *Self) !?*c.AVFrame {
@@ -90,7 +92,7 @@ pub fn nextFrame(self: *Self) !?*c.AVFrame {
   }
 }
 
-fn receiveFrame(self: *Self) !?*c.AVFrame {
+fn receiveFrame(self: *const Self) !?*c.AVFrame {
   switch (c.avcodec_receive_frame(self.codec_context, self.frame)) {
     c.AVERROR_EOF, c.AVERROR(c.EAGAIN) => return null,
     else => |code| {
@@ -100,7 +102,7 @@ fn receiveFrame(self: *Self) !?*c.AVFrame {
   }
 }
 
-fn readPacket(self: *Self) !bool {
+fn readPacket(self: *const Self) !bool {
   switch (c.av_read_frame(self.format_context, self.packet)) {
     c.AVERROR_EOF => return false,
     else => |code| {
@@ -110,7 +112,7 @@ fn readPacket(self: *Self) !bool {
   }
 }
 
-fn sendPacket(self: *Self) !void {
+fn sendPacket(self: *const Self) !void {
   const code = c.avcodec_send_packet(self.codec_context, self.packet);
   try av.checkError(code);
 }

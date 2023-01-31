@@ -23,10 +23,11 @@ pub fn main() !void {
   defer decoder.deinit();
 
   const cc = decoder.codec_context;
-  const scaled = util.scaleToArea(166320, cc.width, cc.height);
-  // const scaled = util.scaleToArea(332640, cc.width, cc.height);
+  // const scaled = util.scaleToArea(166320, cc.width, cc.height);
+  const scaled = util.scaleToArea(332640, cc.width, cc.height);
   // const scaled = util.scaleToArea(720720, cc.width, cc.height);
   // const scaled = .{ .width = 400, .height = 225 };
+  // const scaled = .{ .width = @divTrunc(cc.width, 4), .height = @divTrunc(cc.height, 4) };
 
   var encoder = try av.GifEncoder.init("test.gif", scaled.width, scaled.height);
   defer encoder.deinit();
@@ -326,7 +327,8 @@ pub fn main() !void {
       c.glDrawArrays(c.GL_TRIANGLES, 0, 3);
 
       var gif_frame = try encoder.allocFrame(&palette);
-      defer c.av_frame_free(&util.optional(gif_frame));
+      var gif_frame_opt = util.optional(gif_frame);
+      defer c.av_frame_free(&gif_frame_opt);
 
       c.glReadPixels(0, 0, scaled.width, scaled.height,
         c.GL_RED_INTEGER, c.GL_UNSIGNED_BYTE, gif_frame.data[0]);

@@ -1,5 +1,19 @@
 # Video to GIF transcoder project (WIP)
 
+```sh
+# acquire precompiled ffmpeg
+curl -fLO https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl-shared.zip
+unzip -d deps ffmpeg-*.zip && rm ffmpeg-*.zip
+mv deps/ffmpeg-* deps/ffmpeg
+
+# don't forget to put the .dll files next to the .exe
+mkdir -p zig-out/bin
+cp deps/ffmpeg/bin/*.dll zig-out/bin
+
+# build and run
+zig build run -Dtarget=x86_64-windows-gnu -- input.mp4
+```
+
 ## References:
 - https://learnopengl.com/Getting-started/Hello-Window
 - https://learnopengl.com/In-Practice/Debugging

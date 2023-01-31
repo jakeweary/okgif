@@ -30,12 +30,13 @@ pub fn init(cc: *c.AVCodecContext, width: c_int, height: c_int) !Self {
   };
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *const Self) void {
+  var frame = util.optional(self.frame);
   c.sws_freeContext(self.sws_context);
-  c.av_frame_free(&util.optional(self.frame));
+  c.av_frame_free(&frame);
 }
 
-pub fn resize(self: *Self, frame: *c.AVFrame) !*c.AVFrame {
+pub fn resize(self: *const Self, frame: *c.AVFrame) !*c.AVFrame {
   try av.checkError(c.av_frame_copy_props(self.frame, frame));
   try av.checkError(c.sws_scale(self.sws_context,
     &frame.data, &frame.linesize, 0, frame.height,
