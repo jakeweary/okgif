@@ -7,6 +7,7 @@ pub fn build(b: *std.build.Builder) void {
   });
 
   const exe = b.addExecutable("okgif", "src/main.zig");
+  exe.want_lto = false; // https://github.com/ziglang/zig/issues/8531
   exe.single_threaded = true;
   exe.setTarget(target);
   exe.setBuildMode(mode);
@@ -16,7 +17,7 @@ pub fn build(b: *std.build.Builder) void {
   exe.addLibraryPath("deps/ffmpeg/lib");
   exe.addIncludePath("deps/ffmpeg/include");
   exe.addCSourceFile("deps/deps.c", &.{});
-  exe.linkSystemLibraryName("glfw3");
+  exe.linkSystemLibraryName("glfw");
   exe.linkSystemLibraryName("avcodec");
   exe.linkSystemLibraryName("avformat");
   exe.linkSystemLibraryName("avutil");
@@ -27,7 +28,11 @@ pub fn build(b: *std.build.Builder) void {
       exe.linkSystemLibraryName("gdi32");
       exe.linkSystemLibraryName("opengl32");
     },
-    else => @panic("Unsupported OS")
+    // .linux => {
+    //   exe.linkSystemLibraryName("X11");
+    //   exe.linkSystemLibraryName("GL");
+    // },
+    else => @panic("unsupported os"),
   }
   exe.linkLibC();
   exe.install();

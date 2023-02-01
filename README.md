@@ -17,6 +17,21 @@ zig build run -- input.mp4
 zig build -Drelease-fast -Dtarget=x86_64-windows-gnu -Dcpu=baseline
 ```
 
+```sh
+# upgrade Glad
+url=$(curl -Lo /dev/null -w %{url_effective} https://gen.glad.sh/generate \
+  -d 'generator=c&api=gl%3D4.6&profile=gl%3Dcore&options=HEADER_ONLY')
+curl -o deps/include/glad/gl.h ${url}include/glad/gl.h
+
+# upgrade GLFW
+url=$(curl -Lo /dev/null -w %{url_effective} https://github.com/glfw/glfw/releases/latest)
+curl -LO ${url/tag/download}/glfw-${url##*/}.bin.WIN64.zip
+unzip -q glfw-*.zip
+cp -r glfw-*/include/GLFW/ deps/include/
+cp glfw-*/lib-mingw-w64/libglfw3.a deps/lib/glfw.lib
+rm -rf glfw-*
+```
+
 ## References:
 - https://learnopengl.com/Getting-started/Hello-Window
 - https://learnopengl.com/In-Practice/Debugging
