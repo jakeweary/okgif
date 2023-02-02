@@ -1,2 +1,4 @@
+/deps/assets/blue-noise
 /deps/ffmpeg
 /zig-*
+/out.gif

@@ -1,4 +1,4 @@
-# Video to GIF transcoder project (WIP)
+# Okgif - GIF encoder project (WIP)
 
 ```sh
 # acquire precompiled ffmpeg
@@ -6,15 +6,14 @@ curl -fLO https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-
 unzip -d deps ffmpeg-*.zip && rm ffmpeg-*.zip
 mv deps/ffmpeg-* deps/ffmpeg
 
-# don't forget to put the .dll files next to the .exe
-mkdir -p zig-out/bin
-cp deps/ffmpeg/bin/*.dll zig-out/bin
+# and blue noise textures
+git clone https://github.com/Calinou/free-blue-noise-textures deps/assets/blue-noise
 
 # debug mode build and run
 zig build run -- input.mp4
 
 # explicit release build
-zig build -Drelease-fast -Dtarget=x86_64-windows-gnu -Dcpu=baseline
+zig build -Doptimize=ReleaseFast -Dtarget=x86_64-windows-gnu -Dcpu=baseline
 ```
 
 ```sh
@@ -32,12 +31,17 @@ cp glfw-*/lib-mingw-w64/libglfw3.a deps/lib/glfw.lib
 rm -rf glfw-*
 ```
 
-## References:
+## Resources
+
+### OpenGL
 - https://learnopengl.com/Getting-started/Hello-Window
 - https://learnopengl.com/In-Practice/Debugging
 - https://github.com/Dav1dde/glad/blob/glad2/example/c/gl_glfw.c
 - https://github.com/glfw/glfw/blob/master/examples/triangle-opengl.c
+
+### libav/ffmpeg
 - https://github.com/leandromoreira/ffmpeg-libav-tutorial
-- https://ffmpeg.org/doxygen/4.1/api-h264-test_8c_source.html
-- https://ffmpeg.org/doxygen/4.1/transcoding_8c-example.html
-- https://ffmpeg.org/doxygen/4.1/libavformat_2gif_8c_source.html
+- https://trac.ffmpeg.org/wiki/Using%20libav*
+- https://ffmpeg.org/doxygen/trunk/api-h264-test_8c_source.html
+- https://ffmpeg.org/doxygen/trunk/transcoding_8c-example.html
+- https://ffmpeg.org/doxygen/trunk/libavformat_2gif_8c_source.html

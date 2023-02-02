@@ -1,7 +1,6 @@
 const c = @import("../c.zig");
 const std = @import("std");
 const av = @import("av.zig");
-const util = @import("../util.zig");
 const Self = @This();
 
 gif_stream: *c.AVStream,
@@ -10,6 +9,8 @@ codec_context: *c.AVCodecContext,
 packet: *c.AVPacket,
 
 pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
+  av.log.debug("GifEncoder.init", .{});
+
   const fmt = c.av_guess_format("gif", file, "video/gif");
   try av.checkNull(fmt);
 
@@ -23,20 +24,19 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
   const stream = c.avformat_new_stream(fmt_ctx, codec);
   try av.checkNull(stream);
 
-  util.overwrite(stream.*.codecpar, .{
-    .codec_tag = 0,
-    .codec_id = codec.*.id,
-    .codec_type = c.AVMEDIA_TYPE_VIDEO,
-    .format = c.AV_PIX_FMT_PAL8,
-    .width = width,
-    .height = height,
-  });
+  const codec_params = stream.*.codecpar;
+  codec_params.*.codec_tag = 0;
+  codec_params.*.codec_id = codec.*.id;
+  codec_params.*.codec_type = c.AVMEDIA_TYPE_VIDEO;
+  codec_params.*.format = c.AV_PIX_FMT_PAL8;
+  codec_params.*.width = width;
+  codec_params.*.height = height;
 
   var codec_ctx = c.avcodec_alloc_context3(codec);
   try av.checkNull(codec_ctx);
   errdefer c.avcodec_free_context(&codec_ctx);
 
-  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, stream.*.codecpar));
+  try av.checkError(c.avcodec_parameters_to_context(codec_ctx, codec_params));
   codec_ctx.*.time_base = c.av_make_q(1, 24);
 
   try av.checkError(c.avcodec_open2(codec_ctx, codec, null));
@@ -48,7 +48,7 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
   try av.checkNull(packet);
   errdefer c.av_packet_free(&packet);
 
-  return Self{
+  return .{
     .gif_stream = stream,
     .format_context = fmt_ctx,
     .codec_context = codec_ctx,
@@ -57,6 +57,8 @@ pub fn init(file: [*:0]const u8, width: c_int, height: c_int) !Self {
 }
 
 pub fn deinit(self: *const Self) void {
+  av.log.debug("GifEncoder.deinit", .{});
+
   var packet: ?*c.AVPacket = self.packet;
   var codec_ctx: ?*c.AVCodecContext = self.codec_context;
   var format_ctx: ?*c.AVFormatContext = self.format_context;
@@ -66,26 +68,33 @@ pub fn deinit(self: *const Self) void {
 }
 
 pub fn finish(self: *const Self) !void {
+  av.log.debug("GifEncoder.finish", .{});
+
   try av.checkError(c.av_write_trailer(self.format_context));
   try av.checkError(c.avio_closep(&self.format_context.pb));
 }
 
-pub fn allocFrame(self: *const Self, palette: *const [0x100][4]u8) !*c.AVFrame {
+pub fn allocFrame(self: *const Self, pts: c_int, palette: *const [0x100][4]u8) !*c.AVFrame {
+  av.log.debug("GifEncoder.allocFrame", .{});
+
   var frame = c.av_frame_alloc();
   try av.checkNull(frame);
   errdefer c.av_frame_free(&frame);
 
+  frame.*.pts = pts;
   frame.*.format = c.AV_PIX_FMT_PAL8;
   frame.*.width = self.codec_context.width;
   frame.*.height = self.codec_context.height;
   try av.checkError(c.av_frame_get_buffer(frame, 4));
 
-  @memcpy(frame.*.data[1], @ptrCast([*]const u8, palette), 0x400);
+  @memcpy(frame.*.data[1], @ptrCast(*const [0x400]u8, palette), 0x400);
 
   return frame;
 }
 
 pub fn encodeFrame(self: *const Self, frame: ?*c.AVFrame) !void {
+  av.log.debug("GifEncoder.encodeFrame", .{});
+
   try av.checkError(c.avcodec_send_frame(self.codec_context, frame));
   while (try self.receivePacket()) |packet| {
     c.av_packet_rescale_ts(packet, self.codec_context.time_base, self.gif_stream.time_base);
@@ -94,6 +103,8 @@ pub fn encodeFrame(self: *const Self, frame: ?*c.AVFrame) !void {
 }
 
 fn receivePacket(self: *const Self) !?*c.AVPacket {
+  av.log.debug("GifEncoder.receivePacket", .{});
+
   switch (c.avcodec_receive_packet(self.codec_context, self.packet)) {
     c.AVERROR_EOF, c.AVERROR(c.EAGAIN) => return null,
     else => |code| {

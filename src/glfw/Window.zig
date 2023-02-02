@@ -1,7 +1,6 @@
 const c = @import("../c.zig");
 const gl = @import("../gl/gl.zig");
 const glfw = @import("glfw.zig");
-const fns = @import("fns.zig");
 const Rect = @import("Rect.zig");
 const Self = @This();
 
@@ -21,8 +20,6 @@ pub fn init(w: c_int, h: c_int, title: [*:0]const u8, hints: []const [2]c_int) !
     return error.GLAD_LoadError;
 
   gl.debug.enableDebugMessages();
-
-  _ = c.glfwSetKeyCallback(ptr, fns.onKey);
 
   return .{ .ptr = ptr };
 }
