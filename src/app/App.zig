@@ -25,6 +25,7 @@ resizer: av.FrameResizer,
 textures: Textures,
 programs: Programs,
 
+fbo: c.GLuint,
 vao: c.GLuint,
 
 pub fn init() !Self {
@@ -88,6 +89,9 @@ pub fn init() !Self {
   self.programs = try Programs.init();
   errdefer self.programs.deinit();
 
+  c.glCreateFramebuffers(1, &self.fbo);
+  errdefer c.glDeleteFramebuffers(1, &self.fbo);
+
   c.glCreateVertexArrays(1, &self.vao);
   errdefer c.glDeleteVertexArrays(1, &self.vao);
 
@@ -123,6 +127,7 @@ pub fn deinit(self: *const Self) void {
   log.debug("App.deinit", .{});
 
   c.glDeleteVertexArrays(1, &self.vao);
+  c.glDeleteFramebuffers(1, &self.fbo);
 
   self.programs.deinit();
   self.textures.deinit();
@@ -169,10 +174,10 @@ pub fn run(self: *Self) !void {
   var palette = palettes.rgb685;
 
   {
-    const fbo = gl.Framebuffer.init(&.{
+    const fbo = gl.Framebuffer.attach(self.fbo, &.{
       .{ self.textures.means[1], 0 },
     });
-    defer fbo.deinit();
+    defer fbo.detach();
 
     var tid: c.GLuint = undefined;
     c.glCreateTextures(c.GL_TEXTURE_2D, 1, &tid);
@@ -221,10 +226,10 @@ pub fn run(self: *Self) !void {
     {
       log.debug("step 2: convert to UCS", .{});
 
-      const fbo = gl.Framebuffer.init(&.{
+      const fbo = gl.Framebuffer.attach(self.fbo, &.{
         .{ self.textures.ucs, 0 },
       });
-      defer fbo.deinit();
+      defer fbo.detach();
 
       const p = self.programs.convert_ucs.use();
       p.textures(.{ .tFrame = self.textures.rgb });
@@ -235,10 +240,10 @@ pub fn run(self: *Self) !void {
     {
       log.debug("step 3: update means", .{});
 
-      const fbo = gl.Framebuffer.init(&.{
+      const fbo = gl.Framebuffer.attach(self.fbo, &.{
         .{ self.textures.means[0], 0 },
       });
-      defer fbo.deinit();
+      defer fbo.detach();
 
       c.glBlendFunc(c.GL_ONE, c.GL_ONE);
       c.glEnable(c.GL_BLEND);
@@ -255,10 +260,10 @@ pub fn run(self: *Self) !void {
     {
       log.debug("step 4: reseed and read means", .{});
 
-      const fbo = gl.Framebuffer.init(&.{
+      const fbo = gl.Framebuffer.attach(self.fbo, &.{
         .{ self.textures.means[1], 0 },
       });
-      defer fbo.deinit();
+      defer fbo.detach();
 
       const p = self.programs.means_reseed.use();
       p.uniforms(.{ .uTime = c.glfwGetTime() });
@@ -277,10 +282,10 @@ pub fn run(self: *Self) !void {
     {
       log.debug("step 5: quantize", .{});
 
-      const fbo = gl.Framebuffer.init(&.{
+      const fbo = gl.Framebuffer.attach(self.fbo, &.{
         .{ self.textures.gif, 0 },
       });
-      defer fbo.deinit();
+      defer fbo.detach();
 
       const p = self.programs.quantize.use();
       p.uniforms(.{ .uFrame = frame_pts, .uMeans = &means });
